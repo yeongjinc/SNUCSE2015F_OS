@@ -1,4 +1,4 @@
-Team08
+Team08 / prj1 branch
 
 컴퓨터공학부 09 최영진(yeongjinc@gmail.com, 010-6544-97e8)
 
