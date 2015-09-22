@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "devices/timer.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -27,6 +28,10 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+/* prj1 : List of waiting processes */
+static struct list wait_list;
+
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -92,6 +97,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&wait_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -314,6 +320,48 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
+
+bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *ta = list_entry (a, struct thread, elem);
+	struct thread *tb = list_entry (b, struct thread, elem);
+
+	int64_t unblock_tick_a = ta->wait_start + ta->wait_length;
+	int64_t unblock_tick_b = tb->wait_start + tb->wait_length;
+
+	return unblock_tick_a < unblock_tick_b;
+}
+
+/*
+ * prj1 : Sleep 
+ */
+void
+thread_sleep(int64_t start, int64_t ticks)
+{
+	struct thread *cur = thread_current();
+	enum intr_level old_level;
+	
+	ASSERT(!intr_context());
+
+	//printf("%lld %lld\n", start, ticks);
+	
+	old_level = intr_disable();	
+	if (cur != idle_thread)
+	{
+		cur->wait_flag = 1;
+		cur->wait_start = start;
+		cur->wait_length = ticks;
+		
+    	list_push_back (&wait_list, &cur->elem);
+		list_sort(&wait_list, sleep_time_less, NULL);
+		thread_block();
+	}
+	intr_set_level(old_level);
+}
+
+
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void
@@ -490,6 +538,23 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+	if( ! list_empty(&wait_list))
+	{
+		struct thread *t = list_entry(list_pop_front(&wait_list), struct thread, elem);
+		if(timer_elapsed(t->wait_start) >= t->wait_length)
+		{
+			t->wait_flag = 0;
+			t->wait_start = 0;
+			t->wait_length = 0;
+
+			thread_unblock(t);
+		}
+		else
+		{
+			list_push_back(&wait_list, &t->elem);
+		}
+	}
+
   if (list_empty (&ready_list))
     return idle_thread;
   else
