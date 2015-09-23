@@ -76,8 +76,6 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-bool priority_more(const struct list_elem *a, const struct list_elem *b, void *aus UNUSED);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -209,9 +207,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  
-  //if(priority > current_thread()->priority)
-  thread_yield();
+
+  thread_check_ready();  
 
   return tid;
 }
@@ -249,8 +246,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
-  list_sort(&ready_list, priority_more, NULL);
+  list_insert_ordered (&ready_list, &t->elem, priority_more, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -322,8 +318,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread)
   { 
-    list_push_back (&ready_list, &cur->elem);
-	list_sort(&ready_list, priority_more, NULL);
+    list_insert_ordered (&ready_list, &cur->elem, priority_more, NULL);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -352,7 +347,7 @@ bool priority_more(const struct list_elem *a, const struct list_elem *b, void *a
 
 /*
  * prj1 : Sleep 
- * interrupt level 관련 로직은 trhead_yield 그대로 썼는데, 이 부분은 검토 필요
+ * interrupt level 관련 로직은 thread_yield 그대로 썼는데, 이 부분은 검토 필요
  */
 void
 thread_sleep(int64_t ticks)
@@ -372,12 +367,26 @@ thread_sleep(int64_t ticks)
 		cur->wait_start = start;
 		cur->wait_length = ticks;
 		
-    	list_push_back(&wait_list, &cur->elem);
-		list_sort(&wait_list, sleep_time_less, NULL);
+    	list_insert_ordered(&wait_list, &cur->elem, sleep_time_less, NULL);
+		
 		thread_block();
 	}
 	intr_set_level(old_level);
 }
+
+void
+thread_check_ready()
+{
+	if(list_empty(&ready_list))
+		return;
+
+	struct thread *cur = thread_current();
+	struct thread *r = list_entry(list_front(&ready_list), struct thread, elem);
+
+	if(cur->priority < r->priority)
+		thread_yield();
+}
+
 
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -402,7 +411,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  thread_yield();
+  thread_check_ready();
 }
 
 /* Returns the current thread's priority. */
@@ -561,18 +570,15 @@ next_thread_to_run (void)
 	// unblock() 에서 ready_list로 넣게 됨
 	if( ! list_empty(&wait_list))
 	{
-		struct thread *t = list_entry(list_pop_front(&wait_list), struct thread, elem);
+		struct thread *t = list_entry(list_front(&wait_list), struct thread, elem);
 		if(timer_elapsed(t->wait_start) >= t->wait_length)
 		{
+			t = list_entry(list_pop_front(&wait_list), struct thread, elem);
 			t->wait_flag = 0;
 			t->wait_start = 0;
 			t->wait_length = 0;
 
 			thread_unblock(t);
-		}
-		else
-		{
-			list_push_front(&wait_list, &t->elem);
 		}
 	}
 
