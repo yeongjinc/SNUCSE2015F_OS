@@ -322,7 +322,6 @@ thread_yield (void)
 
 
 bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-
 bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
 	struct thread *ta = list_entry (a, struct thread, elem);
@@ -336,14 +335,16 @@ bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void 
 
 /*
  * prj1 : Sleep 
+ * interrupt level 관련 로직은 trhead_yield 그대로 썼는데, 이 부분은 검토 필요
  */
 void
-thread_sleep(int64_t start, int64_t ticks)
+thread_sleep(int64_t ticks)
 {
+	int64_t start = timer_ticks();
 	struct thread *cur = thread_current();
 	enum intr_level old_level;
 	
-	ASSERT(!intr_context());
+	ASSERT( ! intr_context());
 
 	//printf("%lld %lld\n", start, ticks);
 	
@@ -354,7 +355,7 @@ thread_sleep(int64_t start, int64_t ticks)
 		cur->wait_start = start;
 		cur->wait_length = ticks;
 		
-    	list_push_back (&wait_list, &cur->elem);
+    	list_push_back(&wait_list, &cur->elem);
 		list_sort(&wait_list, sleep_time_less, NULL);
 		thread_block();
 	}
@@ -538,6 +539,8 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+	// wait_list에 있으면 첫 원소 검사(이미 정렬됨) 후 sleep 시간 지났다면 unblock
+	// unblock() 에서 ready_list로 넣게 됨
 	if( ! list_empty(&wait_list))
 	{
 		struct thread *t = list_entry(list_pop_front(&wait_list), struct thread, elem);
@@ -551,7 +554,7 @@ next_thread_to_run (void)
 		}
 		else
 		{
-			list_push_back(&wait_list, &t->elem);
+			list_push_front(&wait_list, &t->elem);
 		}
 	}
 

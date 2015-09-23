@@ -133,7 +133,7 @@ void thread_yield (void);
 /*
  * prj1 New function
  */
-void thread_sleep(int64_t start, int64_t ticks);
+void thread_sleep(int64_t ticks);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
