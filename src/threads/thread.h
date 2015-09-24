@@ -137,7 +137,7 @@ void thread_sleep(int64_t ticks);
 bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool priority_more(const struct list_elem *a, const struct list_elem *b, void *aus UNUSED);
 
-void thread_check_ready();
+void thread_check_ready(void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
