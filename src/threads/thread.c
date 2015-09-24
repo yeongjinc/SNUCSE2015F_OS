@@ -568,7 +568,7 @@ next_thread_to_run (void)
 {
 	// wait_list에 있으면 첫 원소 검사(이미 정렬됨) 후 sleep 시간 지났다면 unblock
 	// unblock() 에서 ready_list로 넣게 됨
-	if( ! list_empty(&wait_list))
+	while( ! list_empty(&wait_list))
 	{
 		struct thread *t = list_entry(list_front(&wait_list), struct thread, elem);
 		if(timer_elapsed(t->wait_start) >= t->wait_length)
@@ -580,6 +580,8 @@ next_thread_to_run (void)
 
 			thread_unblock(t);
 		}
+		else
+			break;
 	}
 
   if (list_empty (&ready_list))
