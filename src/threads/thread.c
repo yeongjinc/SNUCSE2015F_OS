@@ -325,7 +325,7 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
-
+/* return true if a has less sleep time than b */
 bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
 	struct thread *ta = list_entry (a, struct thread, elem);
@@ -337,6 +337,7 @@ bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void 
 	return unblock_tick_a < unblock_tick_b;
 }
 
+/* return true if a has higher priority than b */
 bool priority_more(const struct list_elem *a, const struct list_elem *b, void *aus UNUSED)
 {
 	struct thread *ta = list_entry (a, struct thread, elem);
@@ -346,7 +347,9 @@ bool priority_more(const struct list_elem *a, const struct list_elem *b, void *a
 }
 
 /*
- * prj1 : Sleep 
+ * sleep thread for ticks
+ * not using 'busy waiting'
+ *
  * interrupt level 관련 로직은 thread_yield 그대로 썼는데, 이 부분은 검토 필요
  */
 void
@@ -358,11 +361,10 @@ thread_sleep(int64_t ticks)
 	
 	ASSERT( ! intr_context());
 
-	//printf("%lld %lld\n", start, ticks);
-	
 	old_level = intr_disable();	
 	if (cur != idle_thread)
 	{
+		// wait 관련 값들을 설정한 뒤 순서대로 wait_list에 삽입 
 		cur->wait_flag = 1;
 		cur->wait_start = start;
 		cur->wait_length = ticks;
@@ -374,6 +376,7 @@ thread_sleep(int64_t ticks)
 	intr_set_level(old_level);
 }
 
+/* yield current thread if it does not have highest priority */
 void
 thread_check_ready()
 {
@@ -387,16 +390,17 @@ thread_check_ready()
 		thread_yield();
 }
 
+/* donate priority to lock holder thread
+ * also donate to nested lock holder thread (< 8 depth, as manual) */
 void donate_priority(struct thread *t)
 {
-	int depth = 0;
 	struct lock *l = t->waiting_lock;
+	int depth = 0;
 	while(l)
 	{
 		depth++;
 		if(depth > 8)
 			break;
-
 		if( ! l->holder)
 			break;
 		if(l->holder->priority >= t->priority)
@@ -408,6 +412,9 @@ void donate_priority(struct thread *t)
 	}
 }
 
+/* restore priority to before donation
+ * but if there is higher priority in donated thread(that means more than one thread donated)
+ * maintain that priority */
 void restore_priority(struct thread *t)
 {
 	if(t->priority != t->original_priority)
@@ -421,6 +428,8 @@ void restore_priority(struct thread *t)
 	}
 }
 
+/* clear donated threads that waiting the lock
+ * called when that lock was released */
 void clear_waiting(struct thread *t, struct lock *wl)
 {
 	struct list_elem *e;
@@ -430,17 +439,6 @@ void clear_waiting(struct thread *t, struct lock *wl)
 		if(w->waiting_lock == wl)
 			list_remove(e);
 	}
-	/*
-	struct list_elem *e = list_begin(&t->waiting);
-	while(e != list_end(&t->waiting))
-	{
-		struct thread *w = list_entry(e, struct thread, waiting_elem);
-		struct list_elem *next = list_next(e);
-		if(w->waiting_lock == wl)
-			list_remove(e);
-		e = next;
-	}
-	*/
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -466,8 +464,9 @@ thread_set_priority (int new_priority)
 {
   thread_current ()->original_priority = new_priority;
   
-  // original로 원복 시도, 올려둔 게 있으면 안함
+  // new_priority로 설정을 시도하나, donate 받은 게 있는 경우 일단 받은 값을 가지도록 
   restore_priority(thread_current());
+
   thread_check_ready();
 }
 

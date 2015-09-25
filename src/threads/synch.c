@@ -67,10 +67,11 @@ sema_down (struct semaphore *sema)
 
   old_level = intr_disable ();
   while (sema->value == 0) 
-    {
+  {
+	  // 우선순위 순서대로 삽입
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, priority_more, NULL);
 	  thread_block ();
-    }
+  }
   sema->value--;
   intr_set_level (old_level);
 }
@@ -115,6 +116,7 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))
   {
+	  // 우선순위 순서대로 삽입하였으나, priority change / donation이 발생했을 가능성이 있어 빼내기 전에 정렬
 	list_sort(&sema->waiters, priority_more, NULL); 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
@@ -206,6 +208,8 @@ lock_acquire (struct lock *lock)
   struct thread *t = thread_current();
   if(lock->holder)
   {
+	  // lock이 걸려 있는 경우, thread가 막힌 lock 변수를 설정하고
+	  // lock holder의 donator 리스트에 현재 thread를 넣은 후 donate 시도
 	  t->waiting_lock = lock;
 	  list_insert_ordered(&lock->holder->donator, &t->donator_elem, priority_more, NULL);
 	  donate_priority(t);
@@ -249,6 +253,8 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
 
+  // lock이 release되었으므로 해당 lock을 기다리던 thread들을 삭제하고
+  // thread의 priority를 donation 받기 전으로 돌림
   struct thread *t = thread_current();
   clear_waiting(t, lock);
   restore_priority(t);

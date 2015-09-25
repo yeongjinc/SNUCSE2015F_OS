@@ -99,10 +99,10 @@ struct thread
 	int wait_length;					/* prj1 : wait length tick */
 
 	// prj1 priority donation
-	int original_priority;
-	struct lock *waiting_lock;
-	struct list donator;
-	struct list_elem donator_elem;
+	int original_priority;				/* prj1 : priority before donation */
+	struct lock *waiting_lock;			/* prj1 : lock that this thread is waiting */
+	struct list donator;				/* prj1 : list of thread that donated this priority */
+	struct list_elem donator_elem;		/* prj1 : list elem of donator */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -137,9 +137,11 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
-/*
- * prj1 New function
- */
+
+/////////////////////////
+//prj1 New function
+/////////////////////////
+//
 void thread_sleep(int64_t ticks);
 bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool priority_more(const struct list_elem *a, const struct list_elem *b, void *aus UNUSED);
@@ -149,7 +151,7 @@ void donate_priority(struct thread *t);
 void clear_waiting(struct thread *t, struct lock *waiting_lock);
 void restore_priority(struct thread *t);
 
-////////////////
+////////////////////////
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
