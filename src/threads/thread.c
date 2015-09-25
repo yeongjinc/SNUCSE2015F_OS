@@ -366,7 +366,7 @@ thread_sleep(int64_t ticks)
 		cur->wait_flag = 1;
 		cur->wait_start = start;
 		cur->wait_length = ticks;
-		
+	
     	list_insert_ordered(&wait_list, &cur->elem, sleep_time_less, NULL);
 		
 		thread_block();
@@ -383,11 +383,65 @@ thread_check_ready()
 	struct thread *cur = thread_current();
 	struct thread *r = list_entry(list_front(&ready_list), struct thread, elem);
 
-	if(cur->priority < r->priority)
+	if(cur->priority <= r->priority)
 		thread_yield();
 }
 
+void donate_priority(struct thread *t)
+{
+	int depth = 0;
+	struct lock *l = t->waiting_lock;
+	while(l)
+	{
+		depth++;
+		if(depth > 8)
+			break;
 
+		if( ! l->holder)
+			break;
+		if(l->holder->priority >= t->priority)
+			break;
+
+		l->holder->priority = t->priority;
+		t = l->holder;
+		l = t->waiting_lock;
+	}
+}
+
+void restore_priority(struct thread *t)
+{
+	if(t->priority != t->original_priority)
+		t->priority = t->original_priority;
+
+	if( ! list_empty(&t->donator))
+	{
+		struct thread *d = list_entry(list_front(&t->donator), struct thread, donator_elem);
+		if(t->priority < d->priority)
+			t->priority = d->priority;
+	}
+}
+
+void clear_waiting(struct thread *t, struct lock *wl)
+{
+	struct list_elem *e;
+	for(e = list_begin(&t->donator); e != list_end(&t->donator); e = list_next(e))
+	{
+		struct thread *w = list_entry(e, struct thread, donator_elem);
+		if(w->waiting_lock == wl)
+			list_remove(e);
+	}
+	/*
+	struct list_elem *e = list_begin(&t->waiting);
+	while(e != list_end(&t->waiting))
+	{
+		struct thread *w = list_entry(e, struct thread, waiting_elem);
+		struct list_elem *next = list_next(e);
+		if(w->waiting_lock == wl)
+			list_remove(e);
+		e = next;
+	}
+	*/
+}
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
@@ -411,6 +465,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_current ()->original_priority = new_priority;
   thread_check_ready();
 }
 
@@ -539,6 +594,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  // for priority donation
+  t->original_priority = priority;
+  list_init(&t->donator);
+  t->waiting_lock = NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

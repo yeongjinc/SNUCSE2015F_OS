@@ -92,6 +92,17 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+	
+	// prj1 replacing busy-waiting
+	int wait_flag;						/* prj1 : 1 when sleeping */
+	int wait_start;						/* prj1 : wait start tick */
+	int wait_length;					/* prj1 : wait length tick */
+
+	// prj1 priority donation
+	int original_priority;
+	struct lock *waiting_lock;
+	struct list donator;
+	struct list_elem donator_elem;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -100,10 +111,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-	int wait_flag;						/* prj1 : 1 when sleeping */
-	int wait_start;						/* prj1 : wait start tick */
-	int wait_length;					/* prj1 : wait length tick */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -138,6 +145,11 @@ bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void 
 bool priority_more(const struct list_elem *a, const struct list_elem *b, void *aus UNUSED);
 
 void thread_check_ready(void);
+void donate_priority(struct thread *t);
+void clear_waiting(struct thread *t, struct lock *waiting_lock);
+void restore_priority(struct thread *t);
+
+////////////////
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
