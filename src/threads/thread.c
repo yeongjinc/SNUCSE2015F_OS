@@ -464,8 +464,10 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
   thread_current ()->original_priority = new_priority;
+  
+  // original로 원복 시도, 올려둔 게 있으면 안함
+  restore_priority(thread_current());
   thread_check_ready();
 }
 
