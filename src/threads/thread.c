@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "devices/timer.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -27,6 +28,10 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+/* prj1 : List of waiting processes */
+static struct list wait_list;
+
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -71,6 +76,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -92,6 +98,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&wait_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -201,6 +208,8 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  thread_check_ready();  
+
   return tid;
 }
 
@@ -237,7 +246,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, priority_more, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -307,11 +316,129 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread)
+  { 
+    list_insert_ordered (&ready_list, &cur->elem, priority_more, NULL);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+/* return true if a has less sleep time than b */
+bool sleep_time_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *ta = list_entry (a, struct thread, elem);
+	struct thread *tb = list_entry (b, struct thread, elem);
+
+	int64_t unblock_tick_a = ta->wait_start + ta->wait_length;
+	int64_t unblock_tick_b = tb->wait_start + tb->wait_length;
+
+	return unblock_tick_a < unblock_tick_b;
+}
+
+/* return true if a has higher priority than b */
+bool priority_more(const struct list_elem *a, const struct list_elem *b, void *aus UNUSED)
+{
+	struct thread *ta = list_entry (a, struct thread, elem);
+	struct thread *tb = list_entry (b, struct thread, elem);
+
+	return ta->priority > tb->priority;	
+}
+
+/*
+ * sleep thread for ticks
+ * not using 'busy waiting'
+ *
+ * interrupt level 관련 로직은 thread_yield 그대로 썼는데, 이 부분은 검토 필요
+ */
+void
+thread_sleep(int64_t ticks)
+{
+	int64_t start = timer_ticks();
+	struct thread *cur = thread_current();
+	enum intr_level old_level;
+	
+	ASSERT( ! intr_context());
+
+	old_level = intr_disable();	
+	if (cur != idle_thread)
+	{
+		// wait 관련 값들을 설정한 뒤 순서대로 wait_list에 삽입 
+		cur->wait_flag = 1;
+		cur->wait_start = start;
+		cur->wait_length = ticks;
+	
+    	list_insert_ordered(&wait_list, &cur->elem, sleep_time_less, NULL);
+		
+		thread_block();
+	}
+	intr_set_level(old_level);
+}
+
+/* yield current thread if it does not have highest priority */
+void
+thread_check_ready()
+{
+	if(list_empty(&ready_list))
+		return;
+
+	struct thread *cur = thread_current();
+	struct thread *r = list_entry(list_front(&ready_list), struct thread, elem);
+
+	if(cur->priority <= r->priority)
+		thread_yield();
+}
+
+/* donate priority to lock holder thread
+ * also donate to nested lock holder thread (< 8 depth, as manual) */
+void donate_priority(struct thread *t)
+{
+	struct lock *l = t->waiting_lock;
+	int depth = 0;
+	while(l)
+	{
+		depth++;
+		if(depth > 8)
+			break;
+		if( ! l->holder)
+			break;
+		if(l->holder->priority >= t->priority)
+			break;
+
+		l->holder->priority = t->priority;
+		t = l->holder;
+		l = t->waiting_lock;
+	}
+}
+
+/* restore priority to before donation
+ * but if there is higher priority in donated thread(that means more than one thread donated)
+ * maintain that priority */
+void restore_priority(struct thread *t)
+{
+	if(t->priority != t->original_priority)
+		t->priority = t->original_priority;
+
+	if( ! list_empty(&t->donator))
+	{
+		struct thread *d = list_entry(list_front(&t->donator), struct thread, donator_elem);
+		if(t->priority < d->priority)
+			t->priority = d->priority;
+	}
+}
+
+/* clear donated threads that waiting the lock
+ * called when that lock was released */
+void clear_waiting(struct thread *t, struct lock *wl)
+{
+	struct list_elem *e;
+	for(e = list_begin(&t->donator); e != list_end(&t->donator); e = list_next(e))
+	{
+		struct thread *w = list_entry(e, struct thread, donator_elem);
+		if(w->waiting_lock == wl)
+			list_remove(e);
+	}
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -335,7 +462,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  thread_current ()->original_priority = new_priority;
+  
+  // new_priority로 설정을 시도하나, donate 받은 게 있는 경우 일단 받은 값을 가지도록 
+  restore_priority(thread_current());
+
+  thread_check_ready();
 }
 
 /* Returns the current thread's priority. */
@@ -464,6 +596,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  // for priority donation
+  t->original_priority = priority;
+  list_init(&t->donator);
+  t->waiting_lock = NULL;
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -490,6 +627,24 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+	// wait_list에 있으면 첫 원소 검사(이미 정렬됨) 후 sleep 시간 지났다면 unblock
+	// unblock() 에서 ready_list로 넣게 됨
+	while( ! list_empty(&wait_list))
+	{
+		struct thread *t = list_entry(list_front(&wait_list), struct thread, elem);
+		if(timer_elapsed(t->wait_start) >= t->wait_length)
+		{
+			t = list_entry(list_pop_front(&wait_list), struct thread, elem);
+			t->wait_flag = 0;
+			t->wait_start = 0;
+			t->wait_length = 0;
+
+			thread_unblock(t);
+		}
+		else
+			break;
+	}
+
   if (list_empty (&ready_list))
     return idle_thread;
   else
