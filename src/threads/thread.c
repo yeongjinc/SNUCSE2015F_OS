@@ -386,7 +386,7 @@ thread_check_ready()
 	struct thread *cur = thread_current();
 	struct thread *r = list_entry(list_front(&ready_list), struct thread, elem);
 
-	if(cur->priority <= r->priority)
+	if( ! intr_context() && cur->priority <= r->priority)
 		thread_yield();
 }
 
