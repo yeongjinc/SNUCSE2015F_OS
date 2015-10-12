@@ -38,11 +38,57 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  char* save_ptr;
+  file_name = strtok_r((char*)file_name, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
+}
+
+static void
+enstack (char *arguments, void **esp)
+{
+  static const int WORD_SIZE = 4;
+  char* token;
+  char* save_ptr;
+  int argument_length;
+  int argc = 0;
+
+  void** argument_address = esp;
+
+  for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+  {
+    argument_length = strlen(token) + 1;
+    *esp -= argument_length;
+    memcpy(*esp, token, argument_length);
+    argc++;
+  }
+
+  while(*(int*)(*esp) % WORD_SIZE > 0) (*esp)--;
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = 0;
+
+  for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+  {
+    argument_length = strlen(token) + 1;
+    argument_address -= argument_length;
+    
+    *esp -= WORD_SIZE;
+    *(int*)(*esp) = argument_address;
+  }
+
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = (int)(*esp) + 4;
+
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = argc;
+
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = 0;
+
 }
 
 /* A thread function that loads a user process and starts it
@@ -54,12 +100,17 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  
+  
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  enstack(file_name, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
