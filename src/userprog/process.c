@@ -84,7 +84,7 @@ enstack (char *arguments, void **esp)
     argument_address -= argument_length;
     
     *esp -= WORD_SIZE;
-    *(int*)(*esp) = argument_address;
+    *(int*)(*esp) = (int)(*argument_address);
   }
 
   /* (char**) argv indicates the first address of argument_address */
