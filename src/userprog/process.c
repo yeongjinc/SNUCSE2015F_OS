@@ -38,6 +38,8 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+
+  /* Parse the first argument of file_name, which is the name of the process */ 
   char* save_ptr;
   file_name = strtok_r((char*)file_name, " ", &save_ptr);
 
@@ -48,6 +50,7 @@ process_execute (const char *file_name)
   return tid;
 }
 
+/* Parsing the arguments and put them into the stack */
 static void
 enstack (char *arguments, void **esp)
 {
@@ -59,6 +62,7 @@ enstack (char *arguments, void **esp)
 
   void** argument_address = esp;
 
+  /* Put the arguments into the stack */
   for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
   {
     argument_length = strlen(token) + 1;
@@ -67,10 +71,13 @@ enstack (char *arguments, void **esp)
     argc++;
   }
 
+  /* Alignment */
   while(*(int*)(*esp) % WORD_SIZE > 0) (*esp)--;
   *esp -= WORD_SIZE;
   *(int*)(*esp) = 0;
 
+
+  /* Put the addresses of the arguments into the stack */
   for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
   {
     argument_length = strlen(token) + 1;
@@ -80,9 +87,11 @@ enstack (char *arguments, void **esp)
     *(int*)(*esp) = argument_address;
   }
 
+  /* (char**) argv indicates the first address of argument_address */
   *esp -= WORD_SIZE;
   *(int*)(*esp) = (int)(*esp) + 4;
 
+  /* Put argc (the number of arguments) into the stack */
   *esp -= WORD_SIZE;
   *(int*)(*esp) = argc;
 
@@ -110,6 +119,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  /* Parse the arguments and put them into the stack after the file is loaded successfully */
   enstack(file_name, &if_.esp);
 
   /* If load failed, quit. */
