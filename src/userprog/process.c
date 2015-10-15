@@ -14,6 +14,7 @@
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -60,14 +61,18 @@ enstack (char *arguments, void **esp)
   int argument_length;
   int argc = 0;
 
-  void** argument_address = esp;
+  char** argv = malloc(sizeof(char*));
 
   /* Put the arguments into the stack */
   for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
   {
     argument_length = strlen(token) + 1;
     *esp -= argument_length;
+    
     memcpy(*esp, token, argument_length);
+
+    argv = realloc(argv, (argc+1)*sizeof(char*));
+    argv[argc] = *esp;
     argc++;
   }
 
@@ -78,18 +83,17 @@ enstack (char *arguments, void **esp)
 
 
   /* Put the addresses of the arguments into the stack */
-  for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+  int argc_iter;
+  for(argc_iter = argc-1; argc_iter >= 0; argc_iter--)
   {
-    argument_length = strlen(token) + 1;
-    argument_address -= argument_length;
-    
     *esp -= WORD_SIZE;
-    *(int*)(*esp) = (int)(*argument_address);
+    memcpy(*esp, &argv[argc_iter], sizeof(char*));
   }
+
 
   /* (char**) argv indicates the first address of argument_address */
   *esp -= WORD_SIZE;
-  *(int*)(*esp) = (int)(*esp) + 4;
+  *(int*)(*esp) = (int)(*esp) + WORD_SIZE;
 
   /* Put argc (the number of arguments) into the stack */
   *esp -= WORD_SIZE;
@@ -98,6 +102,7 @@ enstack (char *arguments, void **esp)
   *esp -= WORD_SIZE;
   *(int*)(*esp) = 0;
 
+  free(argv);
 }
 
 /* A thread function that loads a user process and starts it
@@ -119,8 +124,6 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* Parse the arguments and put them into the stack after the file is loaded successfully */
-  enstack(file_name, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -365,6 +368,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
+
+    /* Parse the arguments and put them into the stack after the file is loaded successfully */
+  enstack(file_name, esp);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
