@@ -39,11 +39,6 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-
-  /* Parse the first argument of file_name, which is the name of the process */ 
-  char* save_ptr;
-  file_name = strtok_r((char*)file_name, " ", &save_ptr);
-
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -114,8 +109,8 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  
-  
+  char *save_ptr;
+  file_name = strtok_r((char*)file_name, " ", &save_ptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -124,7 +119,9 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-
+  /* Parse the arguments and put them into the stack after the file is loaded successfully */
+  enstack(save_ptr, &if_.esp);
+  
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -368,9 +365,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
-
-    /* Parse the arguments and put them into the stack after the file is loaded successfully */
-  enstack(file_name, esp);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;

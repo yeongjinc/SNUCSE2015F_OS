@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -22,20 +23,24 @@ syscall_handler (struct intr_frame *f UNUSED)
 void
 halt (void)
 {
+	shutdown_power_off();
 }
 
 void
-exit (int status)
+exit (int status UNUSED)
 {
 }
 
+
 pid_t exec (const char *file)
 {
+	return 0;
 }
 
 int 
 wait (pid_t pid)
 {
+	return 0;
 }
 
 bool
@@ -59,22 +64,25 @@ remove (const char *file)
 int
 open (const char *file)
 {
-
+	return 0;
 }
 
 int
 filesize (int fd)
 {
+	return 0;
 }
 
 int
 read (int fd, void *buffer, unsigned length)
 {
+	return 0;
 }
 
 int
 write (int fd, const void *buffer, unsigned length)
 {
+	return 0;
 }
 
 void
@@ -85,6 +93,7 @@ seek (int fd, unsigned position)
 unsigned
 tell (int fd)
 {
+	return 0;
 }
 
 void
