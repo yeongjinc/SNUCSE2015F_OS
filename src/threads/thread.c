@@ -205,6 +205,10 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* User Program : File List */
+  list_init(&t->file_list);
+  t->current_max_fd = 10;
+
   /* Add to run queue. */
   thread_unblock (t);
 

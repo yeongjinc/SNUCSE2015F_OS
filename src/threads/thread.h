@@ -104,6 +104,10 @@ struct thread
 	struct list donator;				/* prj1 : list of thread that donated this priority */
 	struct list_elem donator_elem;		/* prj1 : list elem of donator */
 
+	// prj2 user program
+	struct list file_list;
+	int current_max_fd;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
