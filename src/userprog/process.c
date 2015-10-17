@@ -112,6 +112,7 @@ start_process (void *file_name_)
   char *save_ptr;
   file_name = strtok_r((char*)file_name, " ", &save_ptr);
 
+  printf("aaa\n");
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -119,9 +120,11 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  printf("bbb\n");
   /* Parse the arguments and put them into the stack after the file is loaded successfully */
   enstack(save_ptr, &if_.esp);
-  
+ 
+  printf("ccc\n"); 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -149,7 +152,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  while(true);
 }
 
 /* Free the current process's resources. */

@@ -48,10 +48,11 @@ syscall_handler (struct intr_frame *f)
 {
 	int nsyscall, ret, args[10];
 	int *esp = (int *)f->esp;
-	
+
 	is_valid_pointer(esp);
 
 	nsyscall = *(esp++);
+	printf("syscall [%d]\n", nsyscall);	
 	switch(nsyscall)
 	{
     	case SYS_HALT:                   /* Halt the operating system. */
