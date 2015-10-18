@@ -209,6 +209,11 @@ thread_create (const char *name, int priority,
   list_init(&t->file_list);
   t->current_max_fd = 10;
 
+  /* User Program : Add Child */
+  struct thread *cur = thread_current();
+  t->parent = cur;
+  list_push_back(&cur->child_list, &t->child_elem);
+  
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -279,6 +284,21 @@ thread_current (void)
   ASSERT (t->status == THREAD_RUNNING);
 
   return t;
+}
+
+struct thread *
+thread_get_child (tid_t tid)
+{
+  struct thread *t = thread_current();
+  struct list_elem *e;
+
+  for(e = list_begin(&t->child_list); e != list_end(&t->child_list); e = list_next(e))
+  {
+	  struct thread *c = list_entry(e, struct thread, child_elem);
+	  if(c->tid == tid)
+		  return c;
+  }
+  return NULL;
 }
 
 /* Returns the running thread's tid. */
@@ -604,6 +624,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->original_priority = priority;
   list_init(&t->donator);
   t->waiting_lock = NULL;
+
+  // for user program
+  list_init(&t->child_list);
+  t->parent = NULL;
+  t->parent_is_waiting = false;
+  t->exit_status = 0;
+  t->is_zombie = false;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

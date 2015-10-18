@@ -11,7 +11,8 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,       /* About to be destroyed. */
+	//THREAD_ZOMBIE,		/* For User Program, Parent waiting */
   };
 
 /* Thread identifier type.
@@ -108,6 +109,13 @@ struct thread
 	struct list file_list;
 	int current_max_fd;
 
+	struct list child_list;
+	struct list_elem child_elem;
+	struct thread *parent;
+	int exit_status;
+	bool parent_is_waiting;
+	bool is_zombie;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -135,6 +143,7 @@ void thread_block (void);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
+struct thread *thread_get_child (tid_t tid);	// prj2 New function
 tid_t thread_tid (void);
 const char *thread_name (void);
 

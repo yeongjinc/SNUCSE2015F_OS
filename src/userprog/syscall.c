@@ -137,6 +137,7 @@ void is_valid_pointer(void *ptr)
 	if( ! is_user_vaddr(ptr))
 		exit(1);
 
+	//FIXME
 	if(ptr < (void *)0x08048000)
 		exit(1);
 }

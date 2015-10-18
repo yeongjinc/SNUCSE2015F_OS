@@ -158,9 +158,25 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while(true);
+  struct thread *c = thread_get_child(child_tid);
+  if(c == NULL)		// TID is invalid or not a child
+	  return -1;
+
+  if(c->parent_is_waiting == true)	// process_wait() has already called
+	  return -1;
+
+  c->parent_is_waiting = true;
+  while(true)
+  {
+	  //printf("while %d %d / parent %d %d\n", c->tid, c->status, c->parent->tid, c->parent->status);
+	  if(c->is_zombie == true)
+	  {
+		  list_remove(&c->child_elem);
+		  return c->exit_status;
+	  }
+  }
 }
 
 /* Free the current process's resources. */
@@ -170,7 +186,21 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  // Close all files
   close_all();
+
+  //TODO release child list
+  
+  if(cur->parent != NULL)
+  {
+	  // wake up parent, if blocked
+	  //printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
+	  cur->is_zombie = true;
+	  if(cur->parent_is_waiting && cur->parent->status == THREAD_BLOCKED)
+	  {
+		  thread_unblock(cur->parent);
+	  }
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
