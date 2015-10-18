@@ -22,6 +22,6 @@ int write (int, const void *, unsigned);
 void seek (int, unsigned);
 unsigned tell (int);
 void close (int);
-
+void close_all (void);
 
 #endif /* userprog/syscall.h */

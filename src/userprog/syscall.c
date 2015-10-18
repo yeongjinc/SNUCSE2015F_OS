@@ -8,6 +8,7 @@
 #include "userprog/pagedir.h"
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
+#include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -23,7 +24,8 @@ struct custom_file
 	struct file *f;
 };
 
-struct file *get_file(int fd)
+struct custom_file *get_custom_file(int fd);
+struct custom_file *get_custom_file(int fd)
 {
 	struct list *l = &thread_current()->file_list;
 	struct list_elem *e;
@@ -32,9 +34,17 @@ struct file *get_file(int fd)
 	{
 		struct custom_file *cf = list_entry(e, struct custom_file, file_elem);
 		if(fd == cf->fd)
-			return cf->f;
+			return cf;
 	}
 	return NULL;
+}
+
+struct file *get_file(int fd)
+{
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf == NULL)
+		return NULL;
+	return cf->f;
 }
 
 void
@@ -46,13 +56,13 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-	int nsyscall, ret, args[10];
+	int nsyscall, ret = 0, args[10];
 	int *esp = (int *)f->esp;
 
 	is_valid_pointer(esp);
 
 	nsyscall = *(esp++);
-	printf("syscall [%d]\n", nsyscall);	
+	//printf("syscall [%d]\n", nsyscall);	
 	switch(nsyscall)
 	{
     	case SYS_HALT:                   /* Halt the operating system. */
@@ -63,24 +73,54 @@ syscall_handler (struct intr_frame *f)
 			exit(args[0]);
 			break;
     	case SYS_EXEC:                   /* Start another process. */
+			get_argument(f, args, 1);
+			args[0] = (int)convert_userp((void *)args[0]);
+			ret = exec((char *)args[0]);
+			break;
     	case SYS_WAIT:                   /* Wait for a child process to die. */
+			get_argument(f, args, 1);
+			ret = wait(args[0]);
+			break;
     	case SYS_CREATE:                 /* Create a file. */
+			get_argument(f, args, 2);
+			args[0] = (int)convert_userp((void *)args[0]);
+			ret = create((char *)args[0], (unsigned)args[1]);
+			break;
     	case SYS_REMOVE:                 /* Delete a file. */
+			get_argument(f, args, 1);
+			args[0] = (int)convert_userp((void *)args[0]);
+			ret = remove((char *)args[0]);
+			break;
     	case SYS_OPEN:                   /* Open a file. */
 			get_argument(f, args, 1);
 			args[0] = (int)convert_userp((void *)args[0]);
-			f->eax = open((char *)args[0]);
+			ret = open((char *)args[0]);
 			break;
     	case SYS_FILESIZE:               /* Obtain a file's size. */
+			get_argument(f, args, 1);
+			ret = filesize(args[0]);
+			break;
     	case SYS_READ:                   /* Read from a file. */
+			get_argument(f, args, 3);
+			args[1] = (int)convert_userp((void *)args[1]);
+			ret = read(args[0], (void *)args[1], (unsigned)args[2]);
+			break;
     	case SYS_WRITE:                  /* Write to a file. */
     		get_argument(f, args, 3);
 			args[1] = (int)convert_userp((void *)args[1]);
-			f->eax = write(args[0], (const void *)args[1], (unsigned)args[2]);
+			ret = write(args[0], (const void *)args[1], (unsigned)args[2]);
 			break;
 		case SYS_SEEK:                   /* Change position in a file. */
+			get_argument(f, args, 2);
+			seek(args[0], (unsigned)args[1]);
+			break;
     	case SYS_TELL:                   /* Report current position in a file. */
+			get_argument(f, args, 1);
+			ret = tell(args[0]);
+			break;
     	case SYS_CLOSE:                  /* Close a file. */
+			get_argument(f, args, 1);
+			close(args[0]);
 			break;
 		default:
 			thread_exit();	
@@ -135,6 +175,7 @@ exit (int status)
 
 pid_t exec (const char *file)
 {
+
 	return 0;
 }
 
@@ -169,6 +210,8 @@ open (const char *filename)
 	if(f == NULL)
 		return -1;
 
+	file_deny_write(f);
+
 	int new_fd = thread_current()->current_max_fd + 1;
 	thread_current()->current_max_fd += 1;
 
@@ -183,27 +226,44 @@ open (const char *filename)
 int
 filesize (int fd)
 {
+	//TODO 태훈
 	return 0;
 }
 
 int
 read (int fd, void *buffer, unsigned length)
 {
-	return 0;
+	if(fd == 0) // stdin
+	{
+		unsigned i;
+		char *buf = (char *)buffer;
+		for(i=0; i<length; i++)
+			buf[i] = input_getc();
+		return length;
+	}
+	else
+	{
+		struct file *f = get_file(fd);
+		if(f == NULL)
+			return -1;
+		
+		int real_length = file_read(f, buffer, length);
+		return real_length;
+	}
 }
 
 int
 write (int fd, const void *buffer, unsigned length)
 {
-	if(fd == 1 || fd == 2)	// it means stdout or stderr
+	if(fd == 1)	// stdout
 	{
-		int i;
+		unsigned i;
 		// 100 chars per putbuf
 		for(i=0; i<=length/100; i++)
 		{
 			int _len = (length - i*100) >= 100? 100 : (length - i*100);
 
-			putbuf(&buffer[100*i], _len);
+			putbuf(&((const char *)buffer)[100*i], _len);
 		}
 		return length;
 	}
@@ -213,7 +273,7 @@ write (int fd, const void *buffer, unsigned length)
 		if(f == NULL)
 			return -1;
 
-		int real_length = file_write(fd, buffer, length);
+		int real_length = file_write(f, buffer, length);
 		return real_length;
 	}
 }
@@ -221,15 +281,40 @@ write (int fd, const void *buffer, unsigned length)
 void
 seek (int fd, unsigned position)
 {
+	//TODO 태훈
 }
 
 unsigned
 tell (int fd)
 {
+	//TODO 태훈
 	return 0;
 }
 
-void
-close (int fd)
+void close_internal(struct custom_file *cf);
+void close_internal(struct custom_file *cf)
 {
+	file_allow_write(cf->f);
+	file_close(cf->f);
+	list_remove(&cf->file_elem);
+	free(cf);
+}
+
+void close (int fd)
+{
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf != NULL)
+		close_internal(cf);
+}
+
+void close_all()
+{
+	struct thread *t = thread_current();
+	struct list_elem *e;
+
+	for(e = list_begin(&t->file_list); e != list_end(&t->file_list); e = list_next (e))
+	{
+		struct custom_file *cf = list_entry(e, struct custom_file, file_elem);
+		close_internal(cf);
+	}
 }

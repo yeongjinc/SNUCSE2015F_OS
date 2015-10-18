@@ -18,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -38,6 +39,9 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  
+  char *dummy;
+  file_name = strtok_r((char *)file_name, " ", &dummy);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -126,7 +130,8 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* Parse the arguments and put them into the stack after the file is loaded successfully */
-  enstack(file_name, args, &if_.esp);
+  if(success)
+	  enstack(file_name, args, &if_.esp);
  
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -164,6 +169,8 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  close_all();
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
