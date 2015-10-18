@@ -48,17 +48,23 @@ process_execute (const char *file_name)
 
 /* Parsing the arguments and put them into the stack */
 static void
-enstack (char *arguments, void **esp)
+enstack (char *file_name, char *arguments, void **esp)
 {
   static const int WORD_SIZE = 4;
   char* token;
   char* save_ptr;
   int argument_length;
-  int argc = 0;
 
+  int argc = 0;
   char** argv = malloc(sizeof(char*));
 
   /* Put the arguments into the stack */
+  argument_length = strlen(file_name) + 1;
+  *esp -= argument_length;
+  memcpy(*esp, file_name, argument_length);
+  argv = realloc(argv, (argc+1)*sizeof(char*));
+  argv[argc] = *esp;
+  argc++;
   for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
   {
     argument_length = strlen(token) + 1;
@@ -109,8 +115,8 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-  char *save_ptr;
-  file_name = strtok_r((char*)file_name, " ", &save_ptr);
+  char *args;
+  file_name = strtok_r((char*)file_name, " ", &args);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -120,7 +126,7 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* Parse the arguments and put them into the stack after the file is loaded successfully */
-  enstack(save_ptr, &if_.esp);
+  enstack(file_name, args, &if_.esp);
  
   /* If load failed, quit. */
   palloc_free_page (file_name);

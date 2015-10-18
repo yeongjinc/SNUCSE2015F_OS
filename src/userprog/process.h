@@ -3,7 +3,7 @@
 
 #include "threads/thread.h"
 
-static void enstack (char *arguments, void **esp);
+static void enstack (char *file_name, char *arguments, void **esp);
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
