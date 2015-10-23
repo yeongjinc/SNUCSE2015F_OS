@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include "threads/synch.h"
 
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
@@ -7,6 +8,7 @@
 typedef int pid_t;
 #define PID_ERROR ((pid_t) -1)
 
+struct lock fl;
 
 void syscall_init (void);
 void halt (void);

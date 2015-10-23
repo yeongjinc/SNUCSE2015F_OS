@@ -140,8 +140,10 @@ start_process (void *file_name_)
 	  enstack(file_name, args, &if_.esp);
   
   	/* Deny executing file write */
+	  lock_acquire(&fl);
 	  thread_current()->executing_file = filesys_open(file_name);
 	  file_deny_write(thread_current()->executing_file);
+	  lock_release(&fl);
   }
 
   /* If load failed, quit. */
@@ -193,7 +195,6 @@ process_wait (tid_t child_tid)
 	  {
 		  //TODO release child's resource
 
-		  list_remove(&c->child_elem);
 		  return c->exit_status;
 	  }
 	  enum intr_level old_level;
@@ -220,6 +221,7 @@ process_exit (void)
 	  // wake up parent, if blocked
 	  // printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
 	  cur->is_zombie = true;
+	  list_remove(&cur->child_elem);
 	  if(cur->parent_is_waiting && cur->parent->status == THREAD_BLOCKED)
 	  {
 		  thread_unblock(cur->parent);
@@ -351,6 +353,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(&fl);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -442,6 +445,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  lock_release(&fl);
   return success;
 }
 

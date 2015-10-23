@@ -52,6 +52,7 @@ struct file *get_file(int fd)
 void
 syscall_init (void) 
 {
+  lock_init(&fl);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -185,11 +186,15 @@ pid_t exec (const char *file) // with parameters
 
 bool openTest(const char *file)
 {
+	lock_acquire(&fl);
 	struct file *f = filesys_open(file);
 	if(f == NULL)
+	{
+		lock_release(&fl);
 		return false;
-	
+	}
 	file_close(f);
+	lock_release(&fl);
 	return true;
 }
 
@@ -202,27 +207,39 @@ wait (pid_t pid)
 bool
 create (const char *filename, unsigned initial_size)
 {
-	if(filename != NULL)
-		return filesys_create(filename, initial_size);
-	else
+	if(filename == NULL)
 		return false;
+
+	lock_acquire(&fl);
+	bool ret = filesys_create(filename, initial_size);
+	lock_release(&fl);
+	return ret;
 }
 
 bool
 remove (const char *filename)
 {
-    if(filename != NULL)
-        return filesys_remove(filename);
-    else
-        return false;
+    if(filename == NULL)
+		return false;
+	lock_acquire(&fl);
+	bool ret = filesys_remove(filename);
+	lock_release(&fl);
+	return ret;
 }
 
 int
 open (const char *filename)
 {
+	if(filename == NULL)
+		return -1;
+
+	lock_acquire(&fl);
 	struct file *f = filesys_open(filename);
 	if(f == NULL)
+	{
+		lock_release(&fl);
 		return -1;
+	}
 
 	//file_deny_write(f);
 	//TODO exec 같은 함수로 
@@ -235,6 +252,7 @@ open (const char *filename)
 	cf->fd = new_fd;
 	list_push_back(&thread_current()->file_list, &cf->file_elem);
 	
+	lock_release(&fl);
 	return new_fd;
 }
 
@@ -244,7 +262,10 @@ filesize (int fd)
 	struct custom_file *cf = get_custom_file(fd);
 	if(cf != NULL)
 	{
-		return file_length(cf->f);
+		lock_acquire(&fl);
+		off_t length = file_length(cf->f);
+		lock_release(&fl);
+		return length;
 	}
 	return 0;
 }
@@ -266,7 +287,9 @@ read (int fd, void *buffer, unsigned length)
 		if(f == NULL)
 			return -1;
 		
+		lock_acquire(&fl);
 		int real_length = file_read(f, buffer, length);
+		lock_release(&fl);
 		return real_length;
 	}
 }
@@ -292,7 +315,9 @@ write (int fd, const void *buffer, unsigned length)
 		if(f == NULL)
 			return -1;
 
+		lock_acquire(&fl);
 		int real_length = file_write(f, buffer, length);
+		lock_release(&fl);
 		return real_length;
 	}
 }
@@ -303,7 +328,9 @@ seek (int fd, unsigned position)
 	struct custom_file *cf = get_custom_file(fd);
 	if(cf != NULL)
 	{
+		lock_acquire(&fl);
 		file_seek(cf->f, position);
+		lock_release(&fl);
 	}
 }
 
@@ -313,7 +340,10 @@ tell (int fd)
 	struct custom_file *cf = get_custom_file(fd);
 	if(cf != NULL)
 	{
-		return file_tell(cf->f);
+		lock_acquire(&fl);
+		off_t t = file_tell(cf->f);
+		lock_release(&fl);
+		return t;
 	}
 	return 0;
 }
@@ -323,7 +353,9 @@ void close_internal(struct custom_file *cf)
 {
 	//file_allow_write(cf->f);	file_close 내에서 이미 호출함 
 	
+	lock_acquire(&fl);
 	file_close(cf->f);
+	lock_release(&fl);
 	list_remove(&cf->file_elem);
 	free(cf);
 }
@@ -353,7 +385,9 @@ void close_all()
 	if(t->executing_file != NULL)
 	{
 		// 이 안에서 allow_write 하게 됨
+		lock_acquire(&fl);
 		file_close(t->executing_file);
+		lock_release(&fl);
 		t->executing_file = NULL;
 	}
 }
