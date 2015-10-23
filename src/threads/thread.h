@@ -109,13 +109,9 @@ struct thread
 	struct list file_list;				/* prj2 : files opened in this process */
 	int current_max_fd;					/* prj2 : increment when new file opened */
 
-	struct list child_list;				/* prj2 : child process list */
-	struct list_elem child_elem;		
-	struct thread *parent;				/* prj2 : parent process  */
-	int exit_status;					/* prj2 : exit(-1 when error) */
-	bool parent_is_waiting;				/* prj2 : if this flag is set, wake up parent */
-	bool is_zombie;						/* prj2 : child process is dead */
-
+	struct list child_list;				/* prj2 : child process list(struct child) */
+	struct child *myself;				/* prj2 : this goes to parent's child_list */
+	
 	struct file *executing_file;		/* prj2 : the file that this process are executing
 										   		  must not be written when executing */
 
@@ -127,6 +123,16 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct child
+{
+	struct list_elem child_elem;
+	tid_t tid;
+	struct thread *parent;			/* parent process */
+	int exit_status;				/* exit status, -1 when error */
+	bool parent_is_waiting;			/* if this flag is set, wake up parent */
+	bool is_zombie;					/* child process is dead */
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -146,7 +152,7 @@ void thread_block (void);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
-struct thread *thread_get_child (tid_t tid);	// prj2 New function
+struct child *get_child (tid_t tid);	// prj2 New function
 tid_t thread_tid (void);
 const char *thread_name (void);
 

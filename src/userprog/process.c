@@ -150,7 +150,7 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   if (!success)
   {
-	thread_current()->exit_status = -1;
+	thread_current()->myself->exit_status = -1;
     thread_exit ();
   }
   /* Start the user process by simulating a return from an
@@ -175,7 +175,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *c = thread_get_child(child_tid);
+  struct child *c = get_child(child_tid);
   if(c == NULL)		// TID is invalid or not a child
 	  return -1;
 
@@ -193,9 +193,11 @@ process_wait (tid_t child_tid)
   {
 	  if(c->is_zombie == true)
 	  {
+		  int exit_status = c->exit_status;
 		  //TODO release child's resource
-
-		  return c->exit_status;
+	  	  list_remove(&c->child_elem);
+		  free(c);
+		  return exit_status;
 	  }
 	  enum intr_level old_level;
 	  old_level = intr_disable(); 
@@ -216,15 +218,14 @@ process_exit (void)
 
   //TODO release child list
   
-  if(cur->parent != NULL)
+  if(cur->myself->parent != NULL)
   {
 	  // wake up parent, if blocked
 	  // printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
-	  cur->is_zombie = true;
-	  list_remove(&cur->child_elem);
-	  if(cur->parent_is_waiting && cur->parent->status == THREAD_BLOCKED)
+	  cur->myself->is_zombie = true;
+	  if(cur->myself->parent_is_waiting && cur->myself->parent->status == THREAD_BLOCKED)
 	  {
-		  thread_unblock(cur->parent);
+		  thread_unblock(cur->myself->parent);
 		  thread_yield();
 	  }
   }

@@ -173,7 +173,7 @@ void
 exit (int status)
 {
 	struct thread *t = thread_current();
-	t->exit_status = status;
+	t->myself->exit_status = status;
 	printf("%s: exit(%d)\n", t->name, status);
 	thread_exit();
 }

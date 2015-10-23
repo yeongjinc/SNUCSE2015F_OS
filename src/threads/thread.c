@@ -9,6 +9,7 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
@@ -213,9 +214,13 @@ thread_create (const char *name, int priority,
   t->executing_file = NULL;
 
   /* User Program : Add Child */
-  struct thread *cur = thread_current();
-  t->parent = cur;
-  list_push_back(&cur->child_list, &t->child_elem);
+  t->myself = malloc(sizeof(struct child));
+  t->myself->tid = tid;
+  t->myself->parent = thread_current();
+  t->myself->parent_is_waiting = false;
+  t->myself->exit_status = 0;
+  t->myself->is_zombie = false;
+  list_push_back(&thread_current()->child_list, &t->myself->child_elem);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -289,15 +294,15 @@ thread_current (void)
   return t;
 }
 
-struct thread *
-thread_get_child (tid_t tid)
+struct child*
+get_child (tid_t tid)
 {
   struct thread *t = thread_current();
   struct list_elem *e;
 
   for(e = list_begin(&t->child_list); e != list_end(&t->child_list); e = list_next(e))
   {
-	  struct thread *c = list_entry(e, struct thread, child_elem);
+	  struct child *c = list_entry(e, struct child, child_elem);
 	  if(c->tid == tid)
 		  return c;
   }
@@ -630,10 +635,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
   // for user program
   list_init(&t->child_list);
-  t->parent = NULL;
-  t->parent_is_waiting = false;
-  t->exit_status = 0;
-  t->is_zombie = false;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
