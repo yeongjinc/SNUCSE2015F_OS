@@ -10,7 +10,7 @@
 #include "threads/malloc.h"
 #include "filesys/file.h"
 #include "devices/input.h"
-
+#include "process.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -177,16 +177,25 @@ exit (int status)
 }
 
 
-pid_t exec (const char *file)
+pid_t exec (const char *file) // with parameters
 {
+	return process_execute(file);
+}
 
-	return 0;
+bool openTest(const char *file)
+{
+	struct file *f = filesys_open(file);
+	if(f == NULL)
+		return false;
+	
+	file_close(f);
+	return true;
 }
 
 int 
 wait (pid_t pid)
 {
-	return 0;
+	return process_wait(pid);
 }
 
 bool

@@ -12,6 +12,7 @@ void syscall_init (void);
 void halt (void);
 void exit (int);
 pid_t exec (const char *);
+bool openTest (const char *);
 int wait (pid_t);
 bool create (const char *, unsigned);
 bool remove (const char *);

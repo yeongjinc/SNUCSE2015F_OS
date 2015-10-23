@@ -35,16 +35,21 @@ process_execute (const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
+
+  //this fn_copy is not only filename but also parameters
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
   
+  /* Create a new thread to execute FILE_NAME. */
   char *dummy;
   file_name = strtok_r((char *)file_name, " ", &dummy);
+  if(openTest(file_name) == false)  // ch
+	  tid = TID_ERROR;
+  else
+	  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -135,9 +140,11 @@ start_process (void *file_name_)
  
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success)
+  {
+	thread_current()->exit_status = -1;
     thread_exit ();
-
+  }
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -188,20 +195,6 @@ process_wait (tid_t child_tid)
 	  thread_block();
 	  intr_set_level(old_level);
   } 
- 
-
-  /*
-  while(true)
-  {
-	  //printf("while %d %d / parent %d %d\n", c->tid, c->status, c->parent->tid, c->parent->status);
-	  if(c->is_zombie == true)
-	  {
-		  printf("??\n");
-		  list_remove(&c->child_elem);
-		  return c->exit_status;
-	  }
-  }
-  */
 }
 
 /* Free the current process's resources. */
