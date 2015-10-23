@@ -168,15 +168,40 @@ process_wait (tid_t child_tid)
 	  return -1;
 
   c->parent_is_waiting = true;
+
+  /*	제대로 된 구현 전 테스트 코드 
+  int i;
+  for(i=0; i<3000000000; i++);
+  */
+  
+  while(true)
+  {
+	  if(c->is_zombie == true)
+	  {
+		  //TODO release child's resource
+
+		  list_remove(&c->child_elem);
+		  return c->exit_status;
+	  }
+	  enum intr_level old_level;
+	  old_level = intr_disable(); 
+	  thread_block();
+	  intr_set_level(old_level);
+  } 
+ 
+
+  /*
   while(true)
   {
 	  //printf("while %d %d / parent %d %d\n", c->tid, c->status, c->parent->tid, c->parent->status);
 	  if(c->is_zombie == true)
 	  {
+		  printf("??\n");
 		  list_remove(&c->child_elem);
 		  return c->exit_status;
 	  }
   }
+  */
 }
 
 /* Free the current process's resources. */
@@ -194,11 +219,12 @@ process_exit (void)
   if(cur->parent != NULL)
   {
 	  // wake up parent, if blocked
-	  //printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
+	  // printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
 	  cur->is_zombie = true;
 	  if(cur->parent_is_waiting && cur->parent->status == THREAD_BLOCKED)
 	  {
 		  thread_unblock(cur->parent);
+		  thread_yield();
 	  }
   }
 
