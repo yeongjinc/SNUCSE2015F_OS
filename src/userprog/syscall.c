@@ -9,6 +9,8 @@
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "filesys/file.h"
+#include "devices/input.h"
+
 
 static void syscall_handler (struct intr_frame *);
 
@@ -137,8 +139,9 @@ void is_valid_pointer(void *ptr)
 	if( ! is_user_vaddr(ptr))
 		exit(-1);
 
-	//FIXME
-	if(ptr < (void *)0x08048000)
+	// 매핑된 페이지가 없는 경우
+	void *page = pagedir_get_page(thread_current()->pagedir, ptr);
+	if(page == NULL)
 		exit(-1);
 }
 
@@ -211,7 +214,8 @@ open (const char *filename)
 	if(f == NULL)
 		return -1;
 
-	file_deny_write(f);
+	//file_deny_write(f);
+	//TODO exec 같은 함수로 
 
 	int new_fd = thread_current()->current_max_fd + 1;
 	thread_current()->current_max_fd += 1;
@@ -227,7 +231,11 @@ open (const char *filename)
 int
 filesize (int fd)
 {
-	//TODO 태훈
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf != NULL)
+	{
+		return file_length(cf->f);
+	}
 	return 0;
 }
 
@@ -282,20 +290,29 @@ write (int fd, const void *buffer, unsigned length)
 void
 seek (int fd, unsigned position)
 {
-	//TODO 태훈
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf != NULL)
+	{
+		file_seek(cf->f, position);
+	}
 }
 
 unsigned
 tell (int fd)
 {
-	//TODO 태훈
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf != NULL)
+	{
+		return file_tell(cf->f);
+	}
 	return 0;
 }
 
 void close_internal(struct custom_file *cf);
 void close_internal(struct custom_file *cf)
 {
-	file_allow_write(cf->f);
+	//file_allow_write(cf->f);	file_close 내에서 이미 호출함 
+	
 	file_close(cf->f);
 	list_remove(&cf->file_elem);
 	free(cf);
@@ -311,11 +328,13 @@ void close (int fd)
 void close_all()
 {
 	struct thread *t = thread_current();
-	struct list_elem *e;
+	struct list_elem *e = list_begin(&t->file_list);
 
-	for(e = list_begin(&t->file_list); e != list_end(&t->file_list); e = list_next (e))
+	while(e != list_end(&t->file_list))
 	{
+		struct list_elem *next = list_next(e); // close_internal에서 free하기 때문에 저장해놓아야 함 
 		struct custom_file *cf = list_entry(e, struct custom_file, file_elem);
 		close_internal(cf);
+		e = next;	
 	}
 }
