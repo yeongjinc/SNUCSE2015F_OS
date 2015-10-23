@@ -209,11 +209,14 @@ thread_create (const char *name, int priority,
   list_init(&t->file_list);
   t->current_max_fd = 10;
 
+  /* User Program : Init executing file */
+  t->executing_file = NULL;
+
   /* User Program : Add Child */
   struct thread *cur = thread_current();
   t->parent = cur;
   list_push_back(&cur->child_list, &t->child_elem);
-  
+
   /* Add to run queue. */
   thread_unblock (t);
 

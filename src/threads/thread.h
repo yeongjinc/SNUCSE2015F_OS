@@ -106,15 +106,18 @@ struct thread
 	struct list_elem donator_elem;		/* prj1 : list elem of donator */
 
 	// prj2 user program
-	struct list file_list;
-	int current_max_fd;
+	struct list file_list;				/* prj2 : files opened in this process */
+	int current_max_fd;					/* prj2 : increment when new file opened */
 
-	struct list child_list;
-	struct list_elem child_elem;
-	struct thread *parent;
-	int exit_status;
-	bool parent_is_waiting;
-	bool is_zombie;
+	struct list child_list;				/* prj2 : child process list */
+	struct list_elem child_elem;		
+	struct thread *parent;				/* prj2 : parent process  */
+	int exit_status;					/* prj2 : exit(-1 when error) */
+	bool parent_is_waiting;				/* prj2 : if this flag is set, wake up parent */
+	bool is_zombie;						/* prj2 : child process is dead */
+
+	struct file *executing_file;		/* prj2 : the file that this process are executing
+										   		  must not be written when executing */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

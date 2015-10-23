@@ -172,6 +172,7 @@ void
 exit (int status)
 {
 	struct thread *t = thread_current();
+	t->exit_status = status;
 	printf("%s: exit(%d)\n", t->name, status);
 	thread_exit();
 }
@@ -339,11 +340,20 @@ void close_all()
 	struct thread *t = thread_current();
 	struct list_elem *e = list_begin(&t->file_list);
 
+	// 이 프로세스에서 오픈한 파일들 
 	while(e != list_end(&t->file_list))
 	{
 		struct list_elem *next = list_next(e); // close_internal에서 free하기 때문에 저장해놓아야 함 
 		struct custom_file *cf = list_entry(e, struct custom_file, file_elem);
 		close_internal(cf);
 		e = next;	
+	}
+
+	// 유저 프로그램 실행 프로세스였다면, 그 프로그램 파일
+	if(t->executing_file != NULL)
+	{
+		// 이 안에서 allow_write 하게 됨
+		file_close(t->executing_file);
+		t->executing_file = NULL;
 	}
 }

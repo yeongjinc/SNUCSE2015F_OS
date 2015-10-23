@@ -134,10 +134,16 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* Parse the arguments and put them into the stack after the file is loaded successfully */
   if(success)
+  {
+  	/* Parse the arguments and put them into the stack after the file is loaded successfully */
 	  enstack(file_name, args, &if_.esp);
- 
+  
+  	/* Deny executing file write */
+	  thread_current()->executing_file = filesys_open(file_name);
+	  file_deny_write(thread_current()->executing_file);
+  }
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success)
