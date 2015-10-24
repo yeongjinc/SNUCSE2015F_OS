@@ -115,6 +115,7 @@ struct thread
 	struct file *executing_file;		/* prj2 : the file that this process are executing
 										   		  must not be written when executing */
 
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -128,10 +129,16 @@ struct child
 {
 	struct list_elem child_elem;
 	tid_t tid;
+	struct thread *self;			/* this process */
 	struct thread *parent;			/* parent process */
 	int exit_status;				/* exit status, -1 when error */
 	bool parent_is_waiting;			/* if this flag is set, wake up parent */
 	bool is_zombie;					/* child process is dead */
+	int load_status;				/* filesys_open test is not enough,
+									   so we will not return exec until this is confirmed 
+												  0 is loading
+												  1 is success
+												  -1 is fail*/
 };
 
 /* If false (default), use round-robin scheduler.

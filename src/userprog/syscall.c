@@ -140,6 +140,11 @@ void is_valid_pointer(void *ptr)
 	if( ! is_user_vaddr(ptr))
 		exit(-1);
 
+	if(ptr > PHYS_BASE)
+		exit(-1);
+
+	if(ptr < 0x08048000)
+		exit(-1);
 	// 매핑된 페이지가 없는 경우
 	void *page = pagedir_get_page(thread_current()->pagedir, ptr);
 	if(page == NULL)
@@ -181,7 +186,25 @@ exit (int status)
 
 pid_t exec (const char *file) // with parameters
 {
-	return process_execute(file);
+	pid_t ret = process_execute(file);
+	if(ret == -1)	// openTest 실패 시 바로 리턴
+		return ret;
+
+	struct child *c = get_child(ret);	
+	// memory 때문에 exec 파일 로딩에 실패할 때
+	// filesys_open (openTest) 까지는 되지만, process.c의 load()가 실패함
+	// 따라서 이것까지 기다렸다가 exec의 결과를 리턴할 수밖에 없음
+	while(c->load_status == 0)	 
+	{
+		thread_yield();
+	}
+
+	if(c->load_status == -1)
+	{
+		return -1;
+	}
+
+	return ret;
 }
 
 bool openTest(const char *file)
@@ -242,7 +265,7 @@ open (const char *filename)
 	}
 
 	//file_deny_write(f);
-	//TODO exec 같은 함수로 
+	// -> start_process로 옮김 
 
 	int new_fd = thread_current()->current_max_fd + 1;
 	thread_current()->current_max_fd += 1;

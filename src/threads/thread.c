@@ -216,10 +216,13 @@ thread_create (const char *name, int priority,
   /* User Program : Add Child */
   t->myself = malloc(sizeof(struct child));
   t->myself->tid = tid;
+  t->myself->self = t;
   t->myself->parent = thread_current();
   t->myself->parent_is_waiting = false;
   t->myself->exit_status = 0;
   t->myself->is_zombie = false;
+  /* User Program : Set Loading Status */
+  t->myself->load_status = 0;
   list_push_back(&thread_current()->child_list, &t->myself->child_elem);
 
   /* Add to run queue. */

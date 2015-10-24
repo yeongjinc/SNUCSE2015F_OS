@@ -136,6 +136,8 @@ start_process (void *file_name_)
 
   if(success)
   {
+	  thread_current()->myself->load_status = 1;
+
   	/* Parse the arguments and put them into the stack after the file is loaded successfully */
 	  enstack(file_name, args, &if_.esp);
   
@@ -150,6 +152,7 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   if (!success)
   {
+	thread_current()->myself->load_status = -1;
 	thread_current()->myself->exit_status = -1;
     thread_exit ();
   }
@@ -194,7 +197,6 @@ process_wait (tid_t child_tid)
 	  if(c->is_zombie == true)
 	  {
 		  int exit_status = c->exit_status;
-		  //TODO release child's resource
 	  	  list_remove(&c->child_elem);
 		  free(c);
 		  return exit_status;
@@ -216,9 +218,20 @@ process_exit (void)
   // Close all files
   close_all();
 
-  //TODO release child list
-  
-  if(cur->myself->parent != NULL)
+  // 모종의 이유로 인해 parent가 먼저 종료된다면, process_wait에서 child free가 안되므로
+  struct list_elem *e = list_begin(&cur->child_list);
+  struct list_elem *next;
+  while(e != list_end(&cur->child_list))
+  {
+	  next = list_next(e);	// syscall.c close_all() 처럼 free할 것이므로 저장해놓아야 함
+	  struct child *c = list_entry(e, struct child, child_elem);
+	  c->self->myself = NULL;
+	  list_remove(&c->child_elem);
+	  free(c);
+	  e = next; 
+  }
+
+  if(cur->myself != NULL && cur->myself->parent != NULL)
   {
 	  // wake up parent, if blocked
 	  // printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
@@ -226,7 +239,7 @@ process_exit (void)
 	  if(cur->myself->parent_is_waiting && cur->myself->parent->status == THREAD_BLOCKED)
 	  {
 		  thread_unblock(cur->myself->parent);
-		  thread_yield();
+		  //thread_yield();
 	  }
   }
 
