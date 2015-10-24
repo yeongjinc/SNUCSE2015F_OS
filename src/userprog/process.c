@@ -14,9 +14,11 @@
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -33,16 +35,84 @@ process_execute (const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
+
+  //this fn_copy is not only filename but also parameters
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  char *dummy;
+  file_name = strtok_r((char *)file_name, " ", &dummy);
+  if(openTest(file_name) == false)  // ch
+	  tid = TID_ERROR;
+  else
+	  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
+}
+
+/* Parsing the arguments and put them into the stack */
+static void
+enstack (char *file_name, char *arguments, void **esp)
+{
+  static const int WORD_SIZE = 4;
+  char* token;
+  char* save_ptr;
+  int argument_length;
+
+  int argc = 0;
+  char** argv = malloc(sizeof(char*));
+
+  /* Put the arguments into the stack */
+  argument_length = strlen(file_name) + 1;
+  *esp -= argument_length;
+  memcpy(*esp, file_name, argument_length);
+  argv = realloc(argv, (argc+1)*sizeof(char*));
+  argv[argc] = *esp;
+  argc++;
+  for(token = strtok_r(arguments, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+  {
+    argument_length = strlen(token) + 1;
+    *esp -= argument_length;
+    
+    memcpy(*esp, token, argument_length);
+
+    argv = realloc(argv, (argc+1)*sizeof(char*));
+    argv[argc] = *esp;
+    argc++;
+  }
+
+  /* Alignment */
+  while(*(int*)(*esp) % WORD_SIZE > 0) (*esp)--;
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = 0;
+
+
+  /* Put the addresses of the arguments into the stack */
+  int argc_iter;
+  for(argc_iter = argc-1; argc_iter >= 0; argc_iter--)
+  {
+    *esp -= WORD_SIZE;
+    memcpy(*esp, &argv[argc_iter], sizeof(char*));
+  }
+
+
+  /* (char**) argv indicates the first address of argument_address */
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = (int)(*esp) + WORD_SIZE;
+
+  /* Put argc (the number of arguments) into the stack */
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = argc;
+
+  *esp -= WORD_SIZE;
+  *(int*)(*esp) = 0;
+
+  free(argv);
 }
 
 /* A thread function that loads a user process and starts it
@@ -54,6 +124,9 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  char *args;
+  file_name = strtok_r((char*)file_name, " ", &args);
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -61,11 +134,28 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  if(success)
+  {
+	  thread_current()->myself->load_status = 1;
+
+  	/* Parse the arguments and put them into the stack after the file is loaded successfully */
+	  enstack(file_name, args, &if_.esp);
+  
+  	/* Deny executing file write */
+	  lock_acquire(&fl);
+	  thread_current()->executing_file = filesys_open(file_name);
+	  file_deny_write(thread_current()->executing_file);
+	  lock_release(&fl);
+  }
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success)
+  {
+	thread_current()->myself->load_status = -1;
+	thread_current()->myself->exit_status = -1;
     thread_exit ();
-
+  }
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -86,9 +176,36 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  struct child *c = get_child(child_tid);
+  if(c == NULL)		// TID is invalid or not a child
+	  return -1;
+
+  if(c->parent_is_waiting == true)	// process_wait() has already called
+	  return -1;
+
+  c->parent_is_waiting = true;
+
+  /*	제대로 된 구현 전 테스트 코드 
+  int i;
+  for(i=0; i<3000000000; i++);
+  */
+  
+  while(true)
+  {
+	  if(c->is_zombie == true)
+	  {
+		  int exit_status = c->exit_status;
+	  	  list_remove(&c->child_elem);
+		  free(c);
+		  return exit_status;
+	  }
+	  enum intr_level old_level;
+	  old_level = intr_disable(); 
+	  thread_block();
+	  intr_set_level(old_level);
+  } 
 }
 
 /* Free the current process's resources. */
@@ -97,6 +214,34 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  // Close all files
+  close_all();
+
+  // 모종의 이유로 인해 parent가 먼저 종료된다면, process_wait에서 child free가 안되므로
+  struct list_elem *e = list_begin(&cur->child_list);
+  struct list_elem *next;
+  while(e != list_end(&cur->child_list))
+  {
+	  next = list_next(e);	// syscall.c close_all() 처럼 free할 것이므로 저장해놓아야 함
+	  struct child *c = list_entry(e, struct child, child_elem);
+	  c->self->myself = NULL;
+	  list_remove(&c->child_elem);
+	  free(c);
+	  e = next; 
+  }
+
+  if(cur->myself != NULL && cur->myself->parent != NULL)
+  {
+	  // wake up parent, if blocked
+	  // printf("%d %d / parent %d %d\n", cur->tid, cur->status, cur->parent->tid, cur->parent->status);
+	  cur->myself->is_zombie = true;
+	  if(cur->myself->parent_is_waiting && cur->myself->parent->status == THREAD_BLOCKED)
+	  {
+		  thread_unblock(cur->myself->parent);
+		  //thread_yield();
+	  }
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -222,6 +367,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(&fl);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -313,6 +459,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  lock_release(&fl);
   return success;
 }
 
@@ -437,7 +584,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 12;
       else
         palloc_free_page (kpage);
     }
