@@ -19,7 +19,7 @@ void *convert_userp(void *ptr);
 void get_argument(struct intr_frame *f, int *argument, int n);
 struct file *get_file(int fd);
 
-struct custom_file
+struct custom_file // mapping file and fd
 {
 	struct list_elem file_elem;
 	int fd;
@@ -236,14 +236,14 @@ create (const char *filename, unsigned initial_size)
 	lock_acquire(&fl);
 	bool ret = filesys_create(filename, initial_size);
 	lock_release(&fl);
-	return ret;
+	return ret; // create file with initial_size
 }
 
 bool
 remove (const char *filename)
 {
     if(filename == NULL)
-		return false;
+		return false; // file does not exist
 	lock_acquire(&fl);
 	bool ret = filesys_remove(filename);
 	lock_release(&fl);
@@ -264,7 +264,7 @@ open (const char *filename)
 		return -1;
 	}
 
-	//file_deny_write(f);
+	//file_deny_write(f); // To prevent another file from writing
 	// -> start_process로 옮김 
 
 	int new_fd = thread_current()->current_max_fd + 1;
@@ -286,11 +286,11 @@ filesize (int fd)
 	if(cf != NULL)
 	{
 		lock_acquire(&fl);
-		off_t length = file_length(cf->f);
+		off_t length = file_length(cf->f); // get file length
 		lock_release(&fl);
 		return length;
 	}
-	return 0;
+	return 0; // if(custom_file is null)
 }
 
 int
