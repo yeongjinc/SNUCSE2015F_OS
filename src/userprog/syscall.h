@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include "threads/synch.h"
+#include "lib/user/syscall.h"
 
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
@@ -26,5 +27,11 @@ void seek (int, unsigned);
 unsigned tell (int);
 void close (int);
 void close_all (void);
+
+bool chdir(const char *);
+bool mkdir(const char *);
+bool readdir(int, char[READDIR_MAX_LEN]);
+bool isdir(int);
+int inumber(int);
 
 #endif /* userprog/syscall.h */

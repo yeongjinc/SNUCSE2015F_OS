@@ -125,8 +125,33 @@ syscall_handler (struct intr_frame *f)
 			get_argument(f, args, 1);
 			close(args[0]);
 			break;
+
+			/* prj 4 */
+		case SYS_CHDIR:                  /* Change the current directory. */
+			get_argument(f, args, 1);
+			args[0] = (int)convert_userp((void *)args[0]);
+			ret = chdir(args[0]);
+			break;
+		case SYS_MKDIR:                  /* Create a directory. */
+			get_argument(f, args, 1);
+			args[0] = (int)convert_userp((void *)args[0]);
+			ret = mkdir(args[0]);
+			break;
+		case SYS_READDIR:                /* Reads a directory entry. */
+			get_argument(f, args, 2);
+			args[1] = (int)convert_userp((void *)args[1]);
+			ret = readdir(args[0], args[1]);
+			break;
+		case SYS_ISDIR:                  /* Tests if a fd represents a directory. */
+			get_argument(f, args, 1);
+			ret = isdir(args[0]);
+			break;
+    	case SYS_INUMBER:                 /* Returns the inode number for a fd. */
+			get_argument(f, args, 1);
+			ret = inumber(args[0]);
+			break;
 		default:
-			thread_exit();	
+			thread_exit();
 	}
 
 	f->eax = ret;
@@ -413,4 +438,29 @@ void close_all()
 		lock_release(&fl);
 		t->executing_file = NULL;
 	}
+}
+
+bool chdir(const char *dir)
+{
+	return false;
+}
+
+bool mkdir(const char *dir)
+{
+	return false;
+}
+
+bool readdir(int fd, char name[READDIR_MAX_LEN + 1])
+{
+	return false;
+}
+
+bool isdir(int fd)
+{
+	return false;
+}
+
+int inumber(int fd)
+{
+	return 0;
 }
