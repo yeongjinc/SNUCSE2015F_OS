@@ -87,6 +87,7 @@ allocate_indirect(int sectors, struct inode_disk *disk_inode)
 {
 	int i, j;
 	static char zeros[BLOCK_SECTOR_SIZE] = {0,};
+
 	int indirect_num = DIV_ROUND_UP(sectors, INDIRECT_SIZE);
 	for(i=0; i<indirect_num; i++)
 	{
@@ -116,6 +117,8 @@ allocate_indirect(int sectors, struct inode_disk *disk_inode)
 int
 allocate_more(struct inode *inode, int add_offset)
 {
+	static int count = 0;
+	count++;
 	int i, j;
 	static char zeros[BLOCK_SECTOR_SIZE] = {0,};
 	struct inode_disk *disk_inode = &inode->data;
@@ -130,7 +133,7 @@ allocate_more(struct inode *inode, int add_offset)
 
 		struct indirect indi;
 		indi.index = 0;
-		if(i == start) // 이미 있는 블럭
+		if(disk_inode->iindex != 0 && i == start) // 이미 있는 블럭
 		{
 			block_read(fs_device, disk_inode->iblocks[i], &indi);
 		}
@@ -155,6 +158,7 @@ allocate_more(struct inode *inode, int add_offset)
 		block_write(fs_device, disk_inode->iblocks[i], &indi);
 	}
 
+	disk_inode->length = add_offset;
 	block_write(fs_device, inode->sector, disk_inode);
 	return add_offset;
 }
@@ -369,9 +373,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if (inode->deny_write_cnt)
     return 0;
 
-  int new_offset = size + offset;
-  if(new_offset > inode->data.length)
-	  inode->data.length = allocate_more(inode, new_offset);
+  int new_length = offset + size;
+  if(new_length > inode->data.length)
+	  allocate_more(inode, new_length);
 
   while (size > 0)
     {
