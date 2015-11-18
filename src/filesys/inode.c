@@ -65,7 +65,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 	  struct indirect indi;
 	  block_read(fs_device, inode->data.iblocks[iindex], &indi);
 
-	  int index = pos / INDIRECT_SIZE % BLOCK_SECTOR_SIZE;
+	  int index = pos / BLOCK_SECTOR_SIZE % INDIRECT_SIZE;
 	  return indi.blocks[index];
   }
   return -1;
