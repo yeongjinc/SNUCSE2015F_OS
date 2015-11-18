@@ -94,7 +94,8 @@ allocate_indirect(int sectors, struct inode_disk *disk_inode)
 		indi = calloc(1, sizeof *indi);
 		indi->index = 0;
 
-		for(j=0; j<(sectors % INDIRECT_SIZE); j++)
+		int isize = sectors >= INDIRECT_SIZE? INDIRECT_SIZE : (sectors % INDIRECT_SIZE);
+		for(j=0; j<isize; j++)
 		{
 			free_map_allocate(1, &indi->blocks[j]);
 			block_write(fs_device, indi->blocks[j], zeros);
@@ -110,6 +111,54 @@ allocate_indirect(int sectors, struct inode_disk *disk_inode)
 		disk_inode->iindex++;
 	}
 }
+
+// returns new length
+int
+allocate_more(struct inode *inode, int add_offset)
+{
+	int i, j;
+	static char zeros[BLOCK_SECTOR_SIZE] = {0,};
+	struct inode_disk *disk_inode = &inode->data;
+
+	int new_sectors = bytes_to_sectors(add_offset) - bytes_to_sectors(disk_inode->length);
+
+	int start = disk_inode->iindex == 0? 0 : disk_inode->iindex-1;
+	for(i=start; i<INDIRECT_SIZE; i++)
+	{
+		if(new_sectors <= 0)
+			break;
+
+		struct indirect indi;
+		indi.index = 0;
+		if(i == start) // 이미 있는 블럭
+		{
+			block_read(fs_device, disk_inode->iblocks[i], &indi);
+		}
+		else // 새로 생성
+		{
+			free_map_allocate(1, &disk_inode->iblocks[i]);
+			disk_inode->iindex++;
+		}
+
+		for(j=indi.index; j<INDIRECT_SIZE; j++)
+		{
+			if(new_sectors <= 0)
+				break;
+
+			free_map_allocate(1, &indi.blocks[j]);
+			block_write(fs_device, indi.blocks[j], zeros);
+			indi.index++;
+
+			new_sectors--;
+		}
+
+		block_write(fs_device, disk_inode->iblocks[i], &indi);
+	}
+
+	block_write(fs_device, inode->sector, disk_inode);
+	return add_offset;
+}
+
 
 void
 free_indirect(struct inode_disk *disk_inode)
@@ -319,6 +368,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
   if (inode->deny_write_cnt)
     return 0;
+
+  int new_offset = size + offset;
+  if(new_offset > inode->data.length)
+	  inode->data.length = allocate_more(inode, new_offset);
 
   while (size > 0)
     {

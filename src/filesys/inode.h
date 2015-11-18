@@ -6,7 +6,7 @@
 #include "devices/block.h"
 
 struct bitmap;
-//struct inode_disk;
+struct inode_disk;
 
 void inode_init (void);
 bool inode_create (block_sector_t, off_t);
@@ -22,7 +22,9 @@ void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 
 // Project 4
-//void allocate_indirect(int, struct inode_disk *);
-//void free_indirect(struct inode_disk *);
+void allocate_indirect(int, struct inode_disk *);
+int allocate_more(struct inode *, int);
+void free_indirect(struct inode_disk *);
+
 
 #endif /* filesys/inode.h */
