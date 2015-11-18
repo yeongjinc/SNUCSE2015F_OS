@@ -11,6 +11,8 @@
 #include "filesys/file.h"
 #include "devices/input.h"
 #include "process.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -24,6 +26,8 @@ struct custom_file
 	struct list_elem file_elem;
 	int fd;
 	struct file *f;
+	struct dir *d;
+	int is_dir;  // struct inode에서 byte 수 맞추기 위해 bool 대신 쓴 것을 고대로 씀
 };
 
 struct custom_file *get_custom_file(int fd);
@@ -130,17 +134,17 @@ syscall_handler (struct intr_frame *f)
 		case SYS_CHDIR:                  /* Change the current directory. */
 			get_argument(f, args, 1);
 			args[0] = (int)convert_userp((void *)args[0]);
-			ret = chdir(args[0]);
+			ret = chdir((void *)args[0]);
 			break;
 		case SYS_MKDIR:                  /* Create a directory. */
 			get_argument(f, args, 1);
 			args[0] = (int)convert_userp((void *)args[0]);
-			ret = mkdir(args[0]);
+			ret = mkdir((void *)args[0]);
 			break;
 		case SYS_READDIR:                /* Reads a directory entry. */
 			get_argument(f, args, 2);
 			args[1] = (int)convert_userp((void *)args[1]);
-			ret = readdir(args[0], args[1]);
+			ret = readdir(args[0], (void *)args[1]);
 			break;
 		case SYS_ISDIR:                  /* Tests if a fd represents a directory. */
 			get_argument(f, args, 1);
@@ -168,7 +172,7 @@ void is_valid_pointer(void *ptr)
 	if(ptr > PHYS_BASE)
 		exit(-1);
 
-	if(ptr < 0x08048000)
+	if(ptr < (void *)0x08048000)
 		exit(-1);
 	// 매핑된 페이지가 없는 경우
 	void *page = pagedir_get_page(thread_current()->pagedir, ptr);
@@ -442,25 +446,34 @@ void close_all()
 
 bool chdir(const char *dir)
 {
-	return false;
+	return filesys_chdir(dir);
 }
 
 bool mkdir(const char *dir)
 {
-	return false;
+	return filesys_mkdir(dir);
 }
 
 bool readdir(int fd, char name[READDIR_MAX_LEN + 1])
 {
-	return false;
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf->is_dir == 0)
+		return false;
+
+	return dir_readdir(cf->d, name);
 }
 
 bool isdir(int fd)
 {
-	return false;
+	struct custom_file *cf = get_custom_file(fd);
+	return cf->is_dir != 0;
 }
 
 int inumber(int fd)
 {
-	return 0;
+	struct custom_file *cf = get_custom_file(fd);
+	if(cf->is_dir == 0)
+		return inode_get_inumber(file_get_inode(cf->f));
+	else
+		return inode_get_inumber(dir_get_inode(cf->d));
 }

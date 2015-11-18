@@ -58,6 +58,16 @@ filesys_create (const char *name, off_t initial_size)
   return success;
 }
 
+bool
+filesys_mkdir(const char *name)
+{
+}
+
+bool
+filesys_chdir(const char *name)
+{
+}
+
 /* Opens the file with the given NAME.
    Returns the new file if successful or a null pointer
    otherwise.

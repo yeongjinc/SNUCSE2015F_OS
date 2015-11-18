@@ -11,8 +11,8 @@
 #define INODE_MAGIC 0x494e4f44
 
 // Only Single Indirect
-// 125 * 125(127) * 512 is similar to 8MB, enough to pass tests
-#define INDIRECT_SIZE 125
+// 124 * 124(126) * 512 is similar to 8MB, enough to pass tests
+#define INDIRECT_SIZE 124
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -21,6 +21,7 @@ struct inode_disk
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
 	int iindex; 						/* Indirect Block Index */
+	int is_dir; 						/* Is directory, 바이트 수 맞추기 위해 bool 대신 int 사용 */
     block_sector_t iblocks[INDIRECT_SIZE]; 	/* Indirect Blocks */
   };
 

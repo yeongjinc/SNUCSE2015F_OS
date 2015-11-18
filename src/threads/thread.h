@@ -114,6 +114,8 @@ struct thread
 	
 	struct file *executing_file;		/* prj2 : the file that this process are executing
 										   		  must not be written when executing */
+	// prj4 file system
+	struct dir *directory; 				/* prj4 : current working directory */
 
 
 #ifdef USERPROG

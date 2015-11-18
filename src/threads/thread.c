@@ -206,14 +206,14 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* User Program : File List */
+  /* User Program : File list */
   list_init(&t->file_list);
   t->current_max_fd = 10;
 
   /* User Program : Init executing file */
   t->executing_file = NULL;
 
-  /* User Program : Add Child */
+  /* User Program : Add child */
   t->myself = malloc(sizeof(struct child));
   t->myself->tid = tid;
   t->myself->self = t;
@@ -221,14 +221,18 @@ thread_create (const char *name, int priority,
   t->myself->parent_is_waiting = false;
   t->myself->exit_status = 0;
   t->myself->is_zombie = false;
-  /* User Program : Set Loading Status */
+  /* User Program : Set loading status */
   t->myself->load_status = 0;
   list_push_back(&thread_current()->child_list, &t->myself->child_elem);
+
+  /* File System : Set directory */
+  if(thread_current()->directory != NULL)
+	  t->directory = dir_reopen(thread_current()->directory);
 
   /* Add to run queue. */
   thread_unblock (t);
 
-  thread_check_ready();  
+  thread_check_ready();
 
   return tid;
 }
@@ -638,6 +642,9 @@ init_thread (struct thread *t, const char *name, int priority)
 
   // for user program
   list_init(&t->child_list);
+
+  // for file system
+  t->directory = NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
