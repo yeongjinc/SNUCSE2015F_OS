@@ -293,6 +293,11 @@ open (const char *filename)
 		return -1;
 	}
 
+	struct dir *d = NULL;
+	int is_dir = f->inode->data.is_dir;
+	if(is_dir != 0)
+		d = filesys_opendir(f->inode);
+
 	//file_deny_write(f);
 	// -> start_process로 옮김 
 
@@ -301,6 +306,8 @@ open (const char *filename)
 
 	struct custom_file *cf = malloc(sizeof(struct custom_file));
 	cf->f = f;
+	cf->d = d;
+	cf->is_dir = is_dir;
 	cf->fd = new_fd;
 	list_push_back(&thread_current()->file_list, &cf->file_elem);
 	
@@ -407,6 +414,8 @@ void close_internal(struct custom_file *cf)
 	
 	lock_acquire(&fl);
 	file_close(cf->f);
+	if(cf->is_dir != 0)
+		dir_close(cf->d);
 	lock_release(&fl);
 	list_remove(&cf->file_elem);
 	free(cf);

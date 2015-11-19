@@ -10,27 +10,6 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-// Only Single Indirect
-// 124 * 124(126) * 512 is similar to 8MB, enough to pass tests
-#define INDIRECT_SIZE 124
-
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk
-  {
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-	int iindex; 						/* Indirect Block Index */
-	int is_dir; 						/* Is directory, 바이트 수 맞추기 위해 bool 대신 int 사용 */
-    block_sector_t iblocks[INDIRECT_SIZE]; 	/* Indirect Blocks */
-  };
-
-struct indirect
-{
-	int index; 								/* Block Index */
-	block_sector_t blocks[INDIRECT_SIZE]; 	/* Blocks */
-	uint32_t unused[2]; 					/* Not used */
-};
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -40,16 +19,6 @@ bytes_to_sectors (off_t size)
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
-struct inode
-  {
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
-  };
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -189,7 +158,7 @@ free_indirect(struct inode_disk *disk_inode)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, int is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -206,6 +175,7 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+	  disk_inode->is_dir = is_dir;
 	  allocate_indirect(sectors, disk_inode);
 
 	  block_write(fs_device, sector, disk_inode);
