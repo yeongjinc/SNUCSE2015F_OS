@@ -23,7 +23,7 @@ dir_create (block_sector_t sector, size_t entry_cnt, struct dir *parent)
 	  char *p = "..";
 	  memcpy(p_entry.name, p, 2);
 	  p_entry.inode_sector = inode_get_inumber(parent->inode);
-	  ret = inode_write_at(c->inode, &p_entry, sizeof p_entry, 0) != sizeof p_entry;
+	  ret = inode_write_at(c->inode, &p_entry, sizeof p_entry, 0) == sizeof p_entry;
   }
 
   dir_close(c);

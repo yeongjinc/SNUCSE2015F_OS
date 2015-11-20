@@ -68,7 +68,7 @@ filesys_mkdir(const char *path)
 	block_sector_t inode_sector = 0;
 	struct dir *dir = dir_from_path(path);
 	char *dir_name = filename_from_path(path);
-	struct inode *dummy; 		// 같은 이름 파일 존재하는지 확인용
+	struct inode *dummy; 		 // 같은 이름 파일 존재하는지 확인용
 
 	bool success = (dir != NULL
 					&& ! dir_lookup(dir, dir_name, &dummy)
@@ -87,13 +87,21 @@ filesys_mkdir(const char *path)
 bool
 filesys_chdir(const char *path)
 {
-	struct dir *dir = dir_from_path(path);
+	char *include_dir = malloc(strlen(path) + 3);
+	char *cur = "/.";
+	memcpy(include_dir, path, strlen(path));
+	memcpy(include_dir+strlen(path), cur, 3);
+	struct dir *dir = dir_from_path(include_dir);
 	if(dir == NULL)
+	{
+		free(include_dir);
 		return false;
+	}
 
 	dir_close(thread_current()->directory);
 	thread_current()->directory = dir;
 
+	free(include_dir);
 	return true;
 }
 
