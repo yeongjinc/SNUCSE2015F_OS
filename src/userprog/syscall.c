@@ -342,7 +342,12 @@ read (int fd, void *buffer, unsigned length)
 	}
 	else
 	{
-		struct file *f = get_file(fd);
+		struct custom_file *cf = get_custom_file(fd);
+		if(cf == NULL)
+			return -1;
+		if(cf->is_dir == 1) // directory일 경우 읽기 불가
+			return -1;
+		struct file *f = cf->f;
 		if(f == NULL)
 			return -1;
 		
@@ -370,7 +375,12 @@ write (int fd, const void *buffer, unsigned length)
 	}
 	else
 	{
-		struct file *f = get_file(fd);
+		struct custom_file *cf = get_custom_file(fd);
+		if(cf == NULL)
+			return -1;
+		if(cf->is_dir == 1) // directory일 경우 쓰기 불가
+			return -1;
+		struct file *f = cf->f;
 		if(f == NULL)
 			return -1;
 
