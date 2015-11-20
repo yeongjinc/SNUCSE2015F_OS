@@ -192,7 +192,6 @@ struct dir *dir_from_path(const char *path)
 		//printf("dir tok : %s\n", tok);
 		if(strcmp(prev, ".") == 0)
 		{
-			continue;
 		}
 		else // ".."은 dir_entry에 삽입하여 처리
 		{

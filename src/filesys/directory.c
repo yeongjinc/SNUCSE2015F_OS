@@ -20,9 +20,10 @@ dir_create (block_sector_t sector, size_t entry_cnt, struct dir *parent)
 
   if(parent != NULL)
   {
-	  char *p = "..";
-	  memcpy(p_entry.name, p, 2);
+	  char p[NAME_MAX+1] = "..";
+	  strlcpy (p_entry.name, p, sizeof p_entry.name);
 	  p_entry.inode_sector = inode_get_inumber(parent->inode);
+	  p_entry.in_use = true;
 	  ret = inode_write_at(c->inode, &p_entry, sizeof p_entry, 0) == sizeof p_entry;
   }
 
@@ -154,10 +155,10 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
     return false;
 
   /* Check that NAME is not in use. */
-  if (lookup (dir, name, NULL, NULL))
+  if (lookup (dir, name, &e, NULL))
     goto done;
 
-  /* Set OFS to offset of free slot.
+   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
      
@@ -201,6 +202,24 @@ dir_remove (struct dir *dir, const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
+ // do not delete directory if it is not empty
+  if(inode->data.is_dir == 1)
+  {
+	struct dir *child = dir_open(inode);
+	struct dir_entry ce;
+	off_t cofs;
+
+	// .. 때문에 sizeof e부터 시작
+	for(cofs = sizeof ce; inode_read_at(child->inode, &ce, sizeof ce, cofs) == sizeof ce; cofs += sizeof ce)
+	{
+		if(ce.in_use)
+		{
+			dir_close(child);
+			goto done;
+		}
+	}
+	dir_close(child);
+  }
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -226,7 +245,10 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
+			
       dir->pos += sizeof e;
+	  if(strcmp(e.name, "..") == 0)
+		  continue;
       if (e.in_use)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
