@@ -21,7 +21,7 @@ void *convert_userp(void *ptr);
 void get_argument(struct intr_frame *f, int *argument, int n);
 struct file *get_file(int fd);
 
-struct custom_file
+struct custom_file // mapping file and fd
 {
 	struct list_elem file_elem;
 	int fd;
@@ -54,14 +54,14 @@ struct file *get_file(int fd)
 }
 
 void
-syscall_init (void) 
+syscall_init (void)
 {
   lock_init(&fl);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
 static void
-syscall_handler (struct intr_frame *f) 
+syscall_handler (struct intr_frame *f)
 {
 	int nsyscall, ret = 0, args[10];
 	int *esp = (int *)f->esp;
@@ -69,7 +69,7 @@ syscall_handler (struct intr_frame *f)
 	is_valid_pointer(esp);
 
 	nsyscall = *(esp++);
-	//printf("syscall [%d]\n", nsyscall);	
+	//printf("syscall [%d]\n", nsyscall);
 	switch(nsyscall)
 	{
     	case SYS_HALT:                   /* Halt the operating system. */
@@ -219,11 +219,11 @@ pid_t exec (const char *file) // with parameters
 	if(ret == -1)	// openTest 실패 시 바로 리턴
 		return ret;
 
-	struct child *c = get_child(ret);	
+	struct child *c = get_child(ret);
 	// memory 때문에 exec 파일 로딩에 실패할 때
 	// filesys_open (openTest) 까지는 되지만, process.c의 load()가 실패함
 	// 따라서 이것까지 기다렸다가 exec의 결과를 리턴할 수밖에 없음
-	while(c->load_status == 0)	 
+	while(c->load_status == 0)
 	{
 		thread_yield();
 	}
@@ -250,7 +250,7 @@ bool openTest(const char *file)
 	return true;
 }
 
-int 
+int
 wait (pid_t pid)
 {
 	return process_wait(pid);
@@ -265,14 +265,14 @@ create (const char *filename, unsigned initial_size)
 	lock_acquire(&fl);
 	bool ret = filesys_create(filename, initial_size);
 	lock_release(&fl);
-	return ret;
+	return ret; // create file with initial_size
 }
 
 bool
 remove (const char *filename)
 {
     if(filename == NULL)
-		return false;
+		return false; // file does not exist
 	lock_acquire(&fl);
 	bool ret = filesys_remove(filename);
 	lock_release(&fl);
@@ -298,8 +298,8 @@ open (const char *filename)
 	if(is_dir != 0)
 		d = filesys_opendir(f->inode);
 
-	//file_deny_write(f);
-	// -> start_process로 옮김 
+	//file_deny_write(f); // To prevent another file from writing
+	// -> start_process로 옮김
 
 	int new_fd = thread_current()->current_max_fd + 1;
 	thread_current()->current_max_fd += 1;
@@ -310,7 +310,7 @@ open (const char *filename)
 	cf->is_dir = is_dir;
 	cf->fd = new_fd;
 	list_push_back(&thread_current()->file_list, &cf->file_elem);
-	
+
 	lock_release(&fl);
 	return new_fd;
 }
@@ -322,11 +322,11 @@ filesize (int fd)
 	if(cf != NULL)
 	{
 		lock_acquire(&fl);
-		off_t length = file_length(cf->f);
+		off_t length = file_length(cf->f); // get file length
 		lock_release(&fl);
 		return length;
 	}
-	return 0;
+	return 0; // if(custom_file is null)
 }
 
 int
@@ -350,7 +350,7 @@ read (int fd, void *buffer, unsigned length)
 		struct file *f = cf->f;
 		if(f == NULL)
 			return -1;
-		
+
 		lock_acquire(&fl);
 		int real_length = file_read(f, buffer, length);
 		lock_release(&fl);
@@ -420,8 +420,8 @@ tell (int fd)
 void close_internal(struct custom_file *cf);
 void close_internal(struct custom_file *cf)
 {
-	//file_allow_write(cf->f);	file_close 내에서 이미 호출함 
-	
+	//file_allow_write(cf->f);	file_close 내에서 이미 호출함
+
 	lock_acquire(&fl);
 	file_close(cf->f);
 	if(cf->is_dir != 0)
@@ -448,13 +448,13 @@ void close_all()
 	struct thread *t = thread_current();
 	struct list_elem *e = list_begin(&t->file_list);
 
-	// 이 프로세스에서 오픈한 파일들 
+	// 이 프로세스에서 오픈한 파일들
 	while(e != list_end(&t->file_list))
 	{
-		struct list_elem *next = list_next(e); // close_internal에서 free하기 때문에 저장해놓아야 함 
+		struct list_elem *next = list_next(e); // close_internal에서 free하기 때문에 저장해놓아야 함
 		struct custom_file *cf = list_entry(e, struct custom_file, file_elem);
 		close_internal(cf);
-		e = next;	
+		e = next;
 	}
 
 	// 유저 프로그램 실행 프로세스였다면, 그 프로그램 파일

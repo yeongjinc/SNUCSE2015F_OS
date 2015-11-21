@@ -109,7 +109,7 @@ struct thread
 	struct list file_list;				/* prj2 : files opened in this process */
 	int current_max_fd;					/* prj2 : increment when new file opened */
 
-	struct list child_list;				/* prj2 : child process list(struct child) */
+	struct list child_list;				/* prj2 : child process list(struct child) - To store child process */
 	struct child *myself;				/* prj2 : this goes to parent's child_list */
 	
 	struct file *executing_file;		/* prj2 : the file that this process are executing
@@ -135,7 +135,7 @@ struct child
 	struct thread *parent;			/* parent process */
 	int exit_status;				/* exit status, -1 when error */
 	bool parent_is_waiting;			/* if this flag is set, wake up parent */
-	bool is_zombie;					/* child process is dead */
+	bool is_zombie;					/* child process is dead - true when terminated */
 	int load_status;				/* filesys_open test is not enough,
 									   so we will not return exec until this is confirmed 
 												  0 is loading

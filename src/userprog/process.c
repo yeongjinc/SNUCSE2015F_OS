@@ -67,7 +67,7 @@ enstack (char *file_name, char *arguments, void **esp)
   int argc = 0;
   char** argv = malloc(sizeof(char*));
 
-  /* Put the arguments into the stack */
+  /* Put the arguments into the stack - using strtok_r library function */
   argument_length = strlen(file_name) + 1;
   *esp -= argument_length;
   memcpy(*esp, file_name, argument_length);
