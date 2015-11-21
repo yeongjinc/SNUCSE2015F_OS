@@ -425,7 +425,12 @@ void close_internal(struct custom_file *cf)
 	lock_acquire(&fl);
 	file_close(cf->f);
 	if(cf->is_dir != 0)
-		dir_close(cf->d);
+	{
+		// inode open count는 file_close에서 한 번 줄이므로, 여기서는 dir free만
+		// dir_close를 하면 안됨
+		if(cf->d != NULL)
+			free(cf->d);
+	}
 	lock_release(&fl);
 	list_remove(&cf->file_elem);
 	free(cf);

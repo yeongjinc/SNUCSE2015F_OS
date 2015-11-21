@@ -126,10 +126,23 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  if (lookup (dir, name, &e, NULL))
+  if(dir->inode->removed == true)
+  {
+	  *inode = NULL;
+  }
+  else if(strcmp(name, "..") == 0)
+  {
+	  inode_read_at(dir->inode, &e, sizeof e, 0);
+	  *inode = inode_open(e.inode_sector);
+  }
+  else if (lookup (dir, name, &e, NULL))
+  {
     *inode = inode_open (e.inode_sector);
+  }
   else
+  {
     *inode = NULL;
+  }
 
   return *inode != NULL;
 }
@@ -245,7 +258,6 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
-			
       dir->pos += sizeof e;
 	  if(strcmp(e.name, "..") == 0)
 		  continue;

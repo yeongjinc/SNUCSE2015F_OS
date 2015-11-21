@@ -128,14 +128,20 @@ filesys_open (const char *path)
   struct inode *inode = NULL;
   char *file_name = filename_from_path(path);
 
-  if(file_name == NULL || strlen(file_name) == 0)
+  //printf("file %s\n", file_name);
+  if(file_name == NULL || strlen(file_name) == 0 || strcmp(file_name, ".") == 0)
+  {
 	  inode = dir_get_inode(dir);
+  }
   else
+  {
 	  dir_lookup (dir, file_name, &inode);
-
-  dir_close (dir);
+	  dir_close(dir);
+  }
+  //printf("inode sector %d\n", inode->sector);
   free(file_name);
 
+  //printf("inode sector2 %d\n", inode->sector);
   return file_open (inode);
 }
 
@@ -183,13 +189,16 @@ struct dir *dir_from_path(const char *path)
 	else
 		dir = dir_reopen(thread_current()->directory);
 
+	if(dir->inode->removed)
+		return NULL;
+
 	char *tok, *ptr, *prev; //마지막 것 파싱하지 않으려고 prev 만듦
 	struct inode *inode;
 	prev = strtok_r(buf, "/", &ptr);
 	tok = strtok_r(NULL, "/", &ptr);
 	while(tok != NULL)
 	{
-		//printf("dir tok : %s\n", tok);
+		//printf("dir prev : %s // tok : %s\n", prev, tok);
 		if(strcmp(prev, ".") == 0)
 		{
 		}
@@ -200,6 +209,8 @@ struct dir *dir_from_path(const char *path)
 
 			if(inode->data.is_dir == 1)
 			{
+				if(inode->removed)
+					return NULL;
 				dir_close(dir);
 				dir = dir_open(inode);
 			}
