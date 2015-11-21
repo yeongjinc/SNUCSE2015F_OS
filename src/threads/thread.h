@@ -11,7 +11,8 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,       /* About to be destroyed. */
+	//THREAD_ZOMBIE,		/* For User Program, Parent waiting */
   };
 
 /* Thread identifier type.
@@ -104,6 +105,19 @@ struct thread
 	struct list donator;				/* prj1 : list of thread that donated this priority */
 	struct list_elem donator_elem;		/* prj1 : list elem of donator */
 
+	// prj2 user program
+	struct list file_list;				/* prj2 : files opened in this process */
+	int current_max_fd;					/* prj2 : increment when new file opened */
+
+	struct list child_list;				/* prj2 : child process list(struct child) */
+	struct child *myself;				/* prj2 : this goes to parent's child_list */
+	
+	struct file *executing_file;		/* prj2 : the file that this process are executing
+										   		  must not be written when executing */
+	// prj4 file system
+	struct dir *directory; 				/* prj4 : current working directory */
+
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -112,6 +126,22 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct child
+{
+	struct list_elem child_elem;
+	tid_t tid;
+	struct thread *self;			/* this process */
+	struct thread *parent;			/* parent process */
+	int exit_status;				/* exit status, -1 when error */
+	bool parent_is_waiting;			/* if this flag is set, wake up parent */
+	bool is_zombie;					/* child process is dead */
+	int load_status;				/* filesys_open test is not enough,
+									   so we will not return exec until this is confirmed 
+												  0 is loading
+												  1 is success
+												  -1 is fail*/
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -131,6 +161,7 @@ void thread_block (void);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
+struct child *get_child (tid_t tid);	// prj2 New function
 tid_t thread_tid (void);
 const char *thread_name (void);
 

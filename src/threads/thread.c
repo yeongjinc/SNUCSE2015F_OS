@@ -9,6 +9,7 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
@@ -205,10 +206,33 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* User Program : File list */
+  list_init(&t->file_list);
+  t->current_max_fd = 10;
+
+  /* User Program : Init executing file */
+  t->executing_file = NULL;
+
+  /* User Program : Add child */
+  t->myself = malloc(sizeof(struct child));
+  t->myself->tid = tid;
+  t->myself->self = t;
+  t->myself->parent = thread_current();
+  t->myself->parent_is_waiting = false;
+  t->myself->exit_status = 0;
+  t->myself->is_zombie = false;
+  /* User Program : Set loading status */
+  t->myself->load_status = 0;
+  list_push_back(&thread_current()->child_list, &t->myself->child_elem);
+
+  /* File System : Set directory */
+  if(thread_current()->directory != NULL)
+	  t->directory = dir_reopen(thread_current()->directory);
+
   /* Add to run queue. */
   thread_unblock (t);
 
-  thread_check_ready();  
+  thread_check_ready();
 
   return tid;
 }
@@ -275,6 +299,21 @@ thread_current (void)
   ASSERT (t->status == THREAD_RUNNING);
 
   return t;
+}
+
+struct child*
+get_child (tid_t tid)
+{
+  struct thread *t = thread_current();
+  struct list_elem *e;
+
+  for(e = list_begin(&t->child_list); e != list_end(&t->child_list); e = list_next(e))
+  {
+	  struct child *c = list_entry(e, struct child, child_elem);
+	  if(c->tid == tid)
+		  return c;
+  }
+  return NULL;
 }
 
 /* Returns the running thread's tid. */
@@ -386,7 +425,7 @@ thread_check_ready()
 	struct thread *cur = thread_current();
 	struct thread *r = list_entry(list_front(&ready_list), struct thread, elem);
 
-	if(cur->priority <= r->priority)
+	if( ! intr_context() && cur->priority <= r->priority)
 		thread_yield();
 }
 
@@ -600,6 +639,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->original_priority = priority;
   list_init(&t->donator);
   t->waiting_lock = NULL;
+
+  // for user program
+  list_init(&t->child_list);
+
+  // for file system
+  t->directory = NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
